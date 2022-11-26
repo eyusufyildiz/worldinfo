@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import json, requests
 import matplotlib.pyplot as plt
-import plotly.express as px
+#import plotly.express as px
+ps = st.pyplot.express
 
 colors={"mag >= 6": 'red',
         "5 <= mag <6": 'orange',
