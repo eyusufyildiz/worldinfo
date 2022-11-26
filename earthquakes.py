@@ -1,7 +1,7 @@
-import json, requests
-from pprint import pprint as pp
-import plotly.express as px
+import streamlit as st
 import pandas as pd
+import json, requests
+import plotly.express as px
 
 colors={"mag >= 6": 'red',
         "5 <= mag <6": 'orange',
@@ -13,6 +13,7 @@ colors={"mag >= 6": 'red',
 url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson"
 res = requests.get(url).json()['features']
 quakes =[]
+
 for q in res :
     x= q['properties']
     x['lat'] = q['geometry']['coordinates'][1]
@@ -39,13 +40,10 @@ fig = px.scatter_mapbox(quakes, lat="lat", lon="lon",
 fig.update_layout(mapbox_style="stamen-terrain")
 fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 #fig.update_layout(autosize=True, width=1500, height=700)
-fig.show()
-print("*"*80)
-print(f"Number of earthquakes (>4.5) in last week: {len(quakes)}")
-print("-"*80)
-#print( pd.json_normalize(colors) )
-#pp( colors )
-print("-"*80)
+#fig.show()
+
+st.write(f"Number of earthquakes (>4.5) in last week: {len(quakes)}")
+
 
 sorted_quakes = quakes.sort_values(by=['mag'], ascending=False)
-sorted_quakes
+st.line_chart(sorted_quakes)
