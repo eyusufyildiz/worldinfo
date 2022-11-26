@@ -32,4 +32,5 @@ st.write(f"Number of earthquakes (>4.5) in last week: {len(quakes)}")
 
 
 sorted_quakes = quakes.sort_values(by=['mag'], ascending=False)
-st.line_chart(sorted_quakes)
+#st.line_chart(sorted_quakes)
+st.print(sorted_quakes)
