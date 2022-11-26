@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import json, requests
-import plotly.express as px
 
 colors={"mag >= 6": 'red',
         "5 <= mag <6": 'orange',
@@ -28,19 +27,6 @@ for q in res :
     else: x['color'] = 'green'
 
 quakes = pd.json_normalize(quakes)
-fig = px.scatter_mapbox(quakes, lat="lat", lon="lon", 
-                        title= "Number of earthquakes (>4.5) in last week:",
-                        hover_name="place", size="mag", 
-                        #animation_frame = 'time', animation_group = 'place', 
-                        #color_continuous_scale=px.colors.cyclical.HSV,
-                        color_continuous_scale=px.colors.sequential.YlOrRd,
-                        hover_data=['title', "mag", "depth", "time", 'alert', "type", "tsunami"],
-                        color_discrete_sequence=[quakes.color], zoom=2, height=500, color='mag')
-                        #color_discrete_sequence=[quakes.color], zoom=2, height=500)
-fig.update_layout(mapbox_style="stamen-terrain")
-fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
-#fig.update_layout(autosize=True, width=1500, height=700)
-#fig.show()
 
 st.write(f"Number of earthquakes (>4.5) in last week: {len(quakes)}")
 
