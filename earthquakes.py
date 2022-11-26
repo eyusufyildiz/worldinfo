@@ -3,7 +3,7 @@ import pandas as pd
 import json, requests
 #import matplotlib.pyplot as plt
 #import plotly.express as px
-ps = st.pyplot.express
+#px = st.pyplot.express
 
 colors={"mag >= 6": 'red',
         "5 <= mag <6": 'orange',
@@ -30,7 +30,7 @@ for q in res :
     else: x['color'] = 'green'
 
 quakes = pd.json_normalize(quakes)
-fig = px.scatter_mapbox(quakes, lat="lat", lon="lon", 
+fig = st.pyplot.scatter_mapbox(quakes, lat="lat", lon="lon", 
                         title= "Number of earthquakes (>4.5) in last week:",
                         hover_name="place", size="mag", 
                         #animation_frame = 'time', animation_group = 'place', 
