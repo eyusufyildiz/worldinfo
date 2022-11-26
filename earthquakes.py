@@ -22,7 +22,7 @@ for q in res :
 quakes = pd.json_normalize(quakes)
 qa=[quakes.lat, quakes.lon, quakes.place_
 
-st.markdown(f"Number of earthquakes (>4.5) in last week: ** {len(quakes)} **")
+st.write(f"Number of earthquakes (>4.5) in last week: ** {len(quakes)} **")
 
     st.map(qa)
 
