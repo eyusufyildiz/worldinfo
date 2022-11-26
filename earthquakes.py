@@ -20,11 +20,10 @@ for q in res :
     else: x['color'] = 'green'
 
 quakes = pd.json_normalize(quakes)
-qa=[quakes.lat, quakes.lon, quakes.place
+qa=[quakes.lat, quakes.lon, quakes.place)
 
 st.write(f"Number of earthquakes (>4.5) in last week: ** {len(quakes)} **")
-
-    st.map(qa)
+st.map(qa)
 
 sorted_quakes = quakes.sort_values(by=['mag'], ascending=False)
 st.write(sorted_quakes)
