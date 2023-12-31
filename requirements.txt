@@ -3,7 +3,6 @@ streamlit_option_menu
 # streamlit.components.v1
 # csv
 domain_utils
-json
 requests
 pandas
 plotly.express
