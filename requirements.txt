@@ -1,6 +1,6 @@
 streamlit
 streamlit_option_menu 
-streamlit.components.v1
+#streamlit.components.v1
 csv
 domain_utils
 json
