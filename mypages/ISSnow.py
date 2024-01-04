@@ -51,7 +51,7 @@ def iss_now1():
 
     st.write(fig)
     "---"
-    st.map(pd_pos, zoom=3, use_container_width=True)
+    # st.map(pd_pos, zoom=3, use_container_width=True)
 
 def iss():
     st.container()
