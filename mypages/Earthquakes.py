@@ -54,24 +54,24 @@ def quakes():
     res = requests.get(url).json()['features']
     quakes =[]
 
-    for q in res :
-        x= q['properties']
-        x['lat'] = q['geometry']['coordinates'][1]
-        x['lon'] = q['geometry']['coordinates'][0]
-        x['depth'] = q['geometry']['coordinates'][2]
-        quakes.append( x )
-
-
-    quakes=pd.DataFrame(quakes)
-    quakes = quakes.filter(['mag', 'place', 'lat', 'lon', 'time', 'url'], axis=1)
-    quakes['time'] =  pd.to_datetime(quakes['time'], unit='ms')
-
-    st.write(f"Number of {mgn} eartquake(s) in {past}: {len(quakes)}")
-
-    if len(quakes):
-        st.map(quakes)
-        with st.expander("Earthquakes list"):
-            quakes.sort_values(by=['mag'], ascending=False)
-            st.write(quakes)
+    if res:
+        for q in res :
+            x= q['properties']
+            x['lat'] = q['geometry']['coordinates'][1]
+            x['lon'] = q['geometry']['coordinates'][0]
+            x['depth'] = q['geometry']['coordinates'][2]
+            quakes.append( x )
+    
+        quakes=pd.DataFrame(quakes)
+        quakes = quakes.filter(['mag', 'place', 'lat', 'lon', 'time', 'url'], axis=1)
+        quakes['time'] =  pd.to_datetime(quakes['time'], unit='ms')
+    
+        st.write(f"Number of {mgn} eartquake(s) in {past}: {len(quakes)}")
+    
+        if len(quakes):
+            st.map(quakes)
+            with st.expander("Earthquakes list"):
+                quakes.sort_values(by=['mag'], ascending=False)
+                st.write(quakes)
 
         
