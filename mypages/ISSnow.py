@@ -32,9 +32,7 @@ def iss_now1():
     
     pos={"lat": float(obj1["iss_position"]['latitude']), "lon": float(obj1["iss_position"]['longitude']) }
     pd_pos = pd.json_normalize(pos)
-    
-    st.code(pd_pos)
-    
+
     st.markdown("### 🛰️ Current ISS Location")
     st.markdown("The International Space Station is moving at close to 28,000 km/h so its location changes really fast! Where is it right now?")
 
@@ -49,9 +47,8 @@ def iss_now1():
         tbl = pd.json_normalize( tool.geo_reverse(lat, lon) )
         st.write( tbl )
 
-    st.write(fig)
-    "---"
-    # st.map(pd_pos, zoom=3, use_container_width=True)
+    #st.write(fig)
+    st.map(pd_pos, zoom=3, use_container_width=True)
 
 def iss():
     st.container()
