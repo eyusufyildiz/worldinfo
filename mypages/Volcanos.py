@@ -23,6 +23,8 @@ def get_volcanos():
                         title= "Volcanos", hover_name="Volcano Name", 
                         hover_data=["Country",  "Elevation (m)"])
 
-    st.write(fig)
+    s#t.write(fig)
+    st.map(volcanos, zoom=3, use_container_width=True)
+
     with st.expander("Volcano list"):
         st.dataframe(volcanos)
