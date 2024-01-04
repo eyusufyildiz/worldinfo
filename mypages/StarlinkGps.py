@@ -7,5 +7,5 @@ from utils import tools as tool
 def satellites():
     st.container()
     sat = '<iframe src="https://satellitemap.space/" width="800px" height="480px" frameborder="0" title="Starlink Satellite Map"></iframe>'
-    components.html(sat, height=1200)
+    components.html(sat, height=800)
 
