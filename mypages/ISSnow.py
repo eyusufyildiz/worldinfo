@@ -10,7 +10,6 @@ tool.streamlit_config(page_title="🛰️ ISS (International Space Station) Now"
 # after it's been refreshed 100 times.
 # count = st_autorefresh(interval=2000, limit=100, key="fizzbuzzcounter")
 
-
 def number_of_people_now():
     url2 = "http://api.open-notify.org/astros.json"
     st.write(url2)
@@ -23,7 +22,6 @@ def number_of_people_now():
     
     data1  = pd.json_normalize(obj2)
     st.write(data1)
-
 
 def iss_now1():
     url1 = "http://api.open-notify.org/iss-now.json"
@@ -50,13 +48,11 @@ def iss_now1():
     st.write(fig)
     st.map(pd_pos, zoom=3, use_container_width=True)
 
-
 def iss():
     st.container()
     st_autorefresh(interval=5000)
-    
     st.write("TEST333")
-
     iss_now1()
+    
     with st.expander("People in Space Right Now"):
         number_of_people_now()
