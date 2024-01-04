@@ -7,6 +7,6 @@ streamlit_javascript
 domain_utils
 requests
 pandas
-plotly.express
+plotly
 lxml
 geopy
