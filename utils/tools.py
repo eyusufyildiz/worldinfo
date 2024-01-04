@@ -18,7 +18,15 @@ def streamlit_config(page_title="", page_icon=None):
             </style> """
     st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-    
+
+def hide_stremlit():
+    hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style> """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+ 
 def timestamp(ts):
     return datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
