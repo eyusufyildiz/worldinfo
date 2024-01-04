@@ -7,7 +7,7 @@ from mypages import StarlinkGps as starlink
 from mypages import Volcanos as volcanos
 from utils import tools as tool
 
-tool.show_globe()
+tool.hide_stremlit()
 
 with st.sidebar:
     selected = option_menu(None, ["IpLocationFinder", "Earthquakes",  "Volcanos", 'Issnow', 'StarlinkGPS'], 
@@ -33,13 +33,4 @@ elif selected =='Issnow':
 elif selected =='StarlinkGPS':
     starlink.satellites()
 
-
-def hide_stremlit():
-    hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            </style> """
-    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
-hide_stremlit()
+tool.show_globe()
