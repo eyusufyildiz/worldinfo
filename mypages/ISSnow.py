@@ -5,7 +5,6 @@ from streamlit_autorefresh import st_autorefresh
 from utils import tools as tool
 
 tool.streamlit_config(page_title="🛰️ ISS (International Space Station) Now", page_icon="🛰️")
-st_autorefresh(interval=5000)
 
 # Run the autorefresh about every 2000 milliseconds (2 seconds) and stop
 # after it's been refreshed 100 times.
@@ -25,6 +24,8 @@ def number_of_people_now():
     st.write(data1)
 
 def iss_now1():
+    st_autorefresh(interval=5000)
+    
     url1 = "http://api.open-notify.org/iss-now.json"
     obj1 = tool.http_requests(url1, type="json")
     ts = obj1["timestamp"] 
