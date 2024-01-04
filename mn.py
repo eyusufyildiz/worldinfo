@@ -6,7 +6,6 @@ from mypages import Earthquakes as earthquakes
 from mypages import StarlinkGps as starlink
 from mypages import Volcanos as volcanos
 
-
 with st.sidebar:
     selected = option_menu(None, ["IpLocationFinder", "Earthquakes",  "Volcanos", '🧿Issnow', 'StarlinkGPS'], 
         icons=['geo-alt', 'cloud-upload', "list-task", 'gear', 'broadcast-pin'], 
@@ -19,7 +18,6 @@ with st.sidebar:
         #    "nav-link-selected": {"background-color": "green"},
         #}
     )
-
 
 if selected == "IpLocationFinder":
     location_finder.get_ip_location()
