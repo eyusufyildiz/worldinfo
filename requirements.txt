@@ -1,6 +1,7 @@
 streamlit
 streamlit_option_menu
 streamlit_autorefresh
+streamlit_javascript
 # streamlit.components.v1
 # csv
 domain_utils
