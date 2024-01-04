@@ -51,7 +51,6 @@ def iss_now1():
 def iss():
     st.container()
     st_autorefresh(interval=5000)
-    st.write("TEST333")
     iss_now1()
     
     with st.expander("People in Space Right Now"):
