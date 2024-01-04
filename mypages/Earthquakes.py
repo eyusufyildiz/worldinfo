@@ -34,7 +34,6 @@ def quakes():
         "30d - All Earthquakes": "all_month.geojson" 
     }
 
-
     col1, col2 = st.columns(2)
 
     with col1:
@@ -48,9 +47,7 @@ def quakes():
         if past in opt and mgn in opt:
             option = opt_list[opt]
 
-
     url = f"https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/{option}"
-
     res = requests.get(url).json()['features']
     quakes =[]
 
@@ -65,7 +62,6 @@ def quakes():
         quakes=pd.DataFrame(quakes)
         quakes = quakes.filter(['mag', 'place', 'lat', 'lon', 'time', 'url'], axis=1)
         quakes['time'] =  pd.to_datetime(quakes['time'], unit='ms')
-    
         st.write(f"Number of {mgn} eartquake(s) in {past}: {len(quakes)}")
     
         if len(quakes):
@@ -73,5 +69,3 @@ def quakes():
             with st.expander("Earthquakes list"):
                 quakes.sort_values(by=['mag'], ascending=False)
                 st.write(quakes)
-
-        
