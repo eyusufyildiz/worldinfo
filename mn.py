@@ -7,7 +7,7 @@ from mypages import StarlinkGps as starlink
 from mypages import Volcanos as volcanos
 
 with st.sidebar:
-    selected = option_menu(None, ["IpLocationFinder", "Earthquakes",  "Volcanos", '🧿Issnow', 'StarlinkGPS'], 
+    selected = option_menu(None, ["IpLocationFinder", "Earthquakes",  "Volcanos", 'Issnow', 'StarlinkGPS'], 
         icons=['geo-alt', 'cloud-upload', "list-task", 'gear', 'broadcast-pin'], 
         menu_icon="gear", 
         default_index=1, 
