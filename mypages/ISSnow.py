@@ -4,6 +4,7 @@ from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 from utils import tools as tool
 
+st_autorefresh(interval=5000)
 tool.streamlit_config(page_title="🛰️ ISS (International Space Station) Now", page_icon="🛰️")
 
 # Run the autorefresh about every 2000 milliseconds (2 seconds) and stop
