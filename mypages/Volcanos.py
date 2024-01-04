@@ -19,7 +19,7 @@ def get_volcanos():
     #volnanos = volnanos.sort_values(by=['Country'])
     st.write(f"Number of volcanos 🌋: {len(volcanos)} from {url1}")
 
-    fig = tool.plotly_map(volcanos, lat="Latitude", lon="Longitude", 
+    fig = tool.plotly_map(volcanos, lat="Latitude dd", lon="Longitude dd", 
                         title= "Volcanos", hover_name="Volcano Name", 
                         hover_data=["Country",  "Elevation (m)"])
 
