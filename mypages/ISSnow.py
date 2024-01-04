@@ -34,6 +34,7 @@ def iss_now1():
     
     pos={"lat": float(obj1["iss_position"]['latitude']), "lon": float(obj1["iss_position"]['longitude']) }
     pd_pos = pd.json_normalize(pos)
+    st.code(pd_pos)
     
     st.markdown("### 🛰️ Current ISS Location")
     st.markdown("The International Space Station is moving at close to 28,000 km/h so its location changes really fast! Where is it right now?")
