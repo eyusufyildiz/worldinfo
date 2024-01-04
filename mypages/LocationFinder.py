@@ -6,7 +6,8 @@ from utils import tools as tool
 
 def get_ip_location():
     st.markdown(f"### 🕵 Ip Adddress/Domain Name Location Finder")
-    client_ip = st.session_state.get("client_ip")
+    #client_ip = st.session_state.get("client_ip")
+    client_ip = tools.client_ip()
 
     if client_ip:
         st.write(f"Your Ip Adress: {client_ip}")
