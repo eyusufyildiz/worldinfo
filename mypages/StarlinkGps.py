@@ -10,5 +10,5 @@ def satellites():
     #components.html(sat, height=800)
     
     sat = '<iframe src="https://satellitemap.space/"  frameborder="0" title="Starlink Satellite Map"></iframe>'
-    components.html(sat)
+    components.html(sat, height=800)
 
