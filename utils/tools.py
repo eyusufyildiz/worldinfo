@@ -89,9 +89,12 @@ def show_globe():
 def geo_reverse(lat, lon):
     from geopy.geocoders import Nominatim
     geolocator = Nominatim(user_agent="geoapiExercises")
-    location    = geolocator.reverse(str(lat)+","+str(lon))
-    location_en = geolocator.reverse(str(lat)+","+str(lon), language='en')
-
+    geolocator = Nominatim(user_agent="geoapiIssNow")
+    #location    = geolocator.reverse(str(lat)+","+str(lon))
+    #location_en = geolocator.reverse(str(lat)+","+str(lon), language='en')
+    location    = geolocator.reverse(f"{lat}, {lon}")
+    location_en = geolocator.reverse(f"{lat}, {lon}", language='en')
+    
     try:
         address = location.raw['address']
         address_en = location_en.raw['address']
