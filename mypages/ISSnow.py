@@ -12,7 +12,7 @@ tool.streamlit_config(page_title="🛰️ ISS (International Space Station) Now"
 
 def number_of_people_now():
     url2 = "http://api.open-notify.org/astros.json"
-    st.write(url2)
+    # st.write(url2)
     obj2 = tool.http_requests(url2, type="json")
     obj2 = obj2["people"]
     number_of_people = len(obj2)
