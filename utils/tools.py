@@ -24,9 +24,10 @@ def timestamp(ts):
 
 
 def plotly_map(data, title, hover_name=None, hover_data=None, 
-               lat="Latitude", lon="Longitude",
-               mapbox_style="stamen-terrain", zoom=3, height=400, size=None ):
-    # data: Dataframe 
+    lat="Latitude", lon="Longitude",
+    mapbox_style="stamen-terrain", zoom=3, height=400, size=None ):
+    
+        # data: Dataframe 
     # hover_data: List
     
     ##  fig = px.scatter_mapbox(volnanos, lat="Latitude", lon="Longitude", 
@@ -90,10 +91,10 @@ def geo_reverse(lat, lon):
     from geopy.geocoders import Nominatim
     geolocator = Nominatim(user_agent="geoapiExercises")
     geolocator = Nominatim(user_agent="geoapiIssNow")
-    #location    = geolocator.reverse(str(lat)+","+str(lon))
-    #location_en = geolocator.reverse(str(lat)+","+str(lon), language='en')
-    location    = geolocator.reverse(f"{lat}, {lon}")
-    location_en = geolocator.reverse(f"{lat}, {lon}", language='en')
+    location    = geolocator.reverse(str(lat) + ", " + str(lon))
+    location_en = geolocator.reverse(str(lat) + ", " + str(lon), language='en')
+    #location    = geolocator.reverse(f"{lat}, {lon}")
+    #location_en = geolocator.reverse(f"{lat}, {lon}", language='en')
     
     try:
         address = location.raw['address']
@@ -111,8 +112,7 @@ def ip_addess_location(ip_or_dom):
 
     return http_requests(url, type="json")
     
-    
-                  
+
 def client_ip():
     from streamlit_javascript import st_javascript
 
@@ -123,11 +123,9 @@ def client_ip():
                 '})')
     
     try:
-
         result = st_javascript(script)
         
         if isinstance(result, dict) and 'ip' in result:
             return result['ip']
-
     except:
         pass
