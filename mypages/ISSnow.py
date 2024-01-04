@@ -47,8 +47,8 @@ def iss_now1():
         tbl = pd.json_normalize( tool.geo_reverse(lat, lon) )
         st.write( tbl )
 
-    #st.write(fig)
-    st.map(pd_pos, zoom=3, use_container_width=True)
+    st.write(fig)
+    #st.map(pd_pos, zoom=3, use_container_width=True)
 
 def iss():
     st.container()
