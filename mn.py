@@ -29,3 +29,14 @@ elif selected =='Issnow':
     issnow.iss()
 elif selected =='StarlinkGPS':
     starlink.satellites()
+
+
+def hide_stremlit():
+    hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style> """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+hide_stremlit()
