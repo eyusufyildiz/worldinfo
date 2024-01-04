@@ -41,10 +41,12 @@ def iss_now1():
     lon = obj1["iss_position"]["longitude"]
     lat = obj1["iss_position"]["latitude"]
     st.success( f"**{zaman}**  [{lat}, {lon}]")
+    
     if tool.geo_reverse(lat, lon):
         st.write("ISS is now on below address/place:")
         tbl = pd.json_normalize( tool.geo_reverse(lat, lon) )
         st.write( tbl )
+
     st.write(fig)
     st.map(pd_pos, zoom=3, use_container_width=True)
 
