@@ -45,7 +45,7 @@ def plotly_map(data, title, hover_name=None, hover_data=None,
                         size=size,
                         hover_name=hover_name,
                         hover_data=hover_data,
-                        #color_discrete_sequence="red",
+                        color_discrete_sequence="red",
                         zoom=zoom, height=height)
     fig.update_layout(mapbox_style=mapbox_style)  # "open-street-map"
     fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
