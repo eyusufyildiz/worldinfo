@@ -33,4 +33,4 @@ elif selected =='Issnow':
 elif selected =='StarlinkGPS':
     starlink.satellites()
 
-tool.show_globe()
+# tool.show_globe()
