@@ -5,6 +5,9 @@ from mypages import ISSnow as issnow
 from mypages import Earthquakes as earthquakes
 from mypages import StarlinkGps as starlink
 from mypages import Volcanos as volcanos
+from utils import tools as tool
+
+tool.show_globe()
 
 with st.sidebar:
     selected = option_menu(None, ["IpLocationFinder", "Earthquakes",  "Volcanos", 'Issnow', 'StarlinkGPS'], 
