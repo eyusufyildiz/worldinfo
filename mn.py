@@ -12,12 +12,12 @@ with st.sidebar:
         icons=['geo-alt', 'cloud-upload', "list-task", 'gear', 'broadcast-pin'], 
         menu_icon="gear", 
         default_index=1, 
-        styles={
-            "container": {"padding": "0!important", "background-color": "#fafafa"},
-            "icon": {"color": "orange", "font-size": "18px"}, 
-            "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"},
-            "nav-link-selected": {"background-color": "green"},
-        }
+        #styles={
+        #    "container": {"padding": "0!important", "background-color": "#fafafa"},
+        #    "icon": {"color": "orange", "font-size": "18px"}, 
+        #    "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"},
+        #    "nav-link-selected": {"background-color": "green"},
+        #}
     )
 
 
