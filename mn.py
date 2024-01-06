@@ -1,9 +1,9 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
-from mypages import LocationFinder as location_finder
+from mypages import IpLocation as location_finder
 from mypages import ISSnow as issnow
 from mypages import Earthquakes as earthquakes
-from mypages import StarlinkGps as starlink
+from mypages import Satellites as starlink
 from mypages import Volcanos as volcanos
 from mypages import Tests as tests
 from utils import tools as tool
