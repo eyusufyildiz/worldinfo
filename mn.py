@@ -23,7 +23,7 @@ with st.sidebar:
         #}
     )
 
-if selected == "IpLocationFinder":
+if selected == "IpLocation":
     location_finder.get_ip_location()
 elif selected == "Earthquakes":
     earthquakes.quakes()
@@ -31,7 +31,7 @@ elif selected == "Volcanos":
     volcanos.get_volcanos()
 elif selected =='Issnow':
     issnow.iss()
-elif selected =='StarlinkGPS':
+elif selected =='Satellites':
     starlink.satellites()
 
 # tool.show_globe()
