@@ -11,7 +11,7 @@ from utils import tools as tool
 tool.hide_stremlit()
 
 with st.sidebar:
-    selected = option_menu(None, ["IpLocationFinder", "Earthquakes",  "Volcanos", 'Issnow', 'StarlinkGPS'], 
+    selected = option_menu(None, ["IpLocation", "Earthquakes",  "Volcanos", 'Issnow', 'Satellites'], 
         icons=['geo-alt', 'cloud-upload', "list-task", 'gear', 'broadcast-pin'], 
         menu_icon="gear", 
         default_index=1, 
