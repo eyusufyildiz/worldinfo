@@ -10,7 +10,6 @@ tool.streamlit_config(page_title="🛰️ ISS (International Space Station) Now"
 # after it's been refreshed 100 times.
 # count = st_autorefresh(interval=2000, limit=100, key="fizzbuzzcounter")
 
-@st.cache_data
 def number_of_people_now():
     url2 = "http://api.open-notify.org/astros.json"
     # st.write(url2)
