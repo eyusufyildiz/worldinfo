@@ -24,7 +24,6 @@ def number_of_people_now():
     data1  = pd.json_normalize(obj2)
     st.write(data1)
 
-@st.cache_data
 def iss_now1():
     url1 = "http://api.open-notify.org/iss-now.json"
     obj1 = tool.http_requests(url1, type="json")
@@ -51,12 +50,12 @@ def iss_now1():
 
     # st.write(fig)
     st.map(pd_pos, zoom=3, use_container_width=True)
+    st.rerun()
 
 def iss():
     st.container()
     #st_autorefresh(interval=5000)
     iss_now1()
-    st.rerun()
     
     with st.expander("People in Space Right Now"):
         number_of_people_now()
