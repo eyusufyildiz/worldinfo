@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from streamlit_autorefresh import st_autorefresh
+#from streamlit_autorefresh import st_autorefresh
 from utils import tools as tool
 
 tool.streamlit_config(page_title="🛰️ ISS (International Space Station) Now", page_icon="🛰️")
@@ -53,8 +53,9 @@ def iss_now1():
 
 def iss():
     st.container()
-    st_autorefresh(interval=5000)
+    #st_autorefresh(interval=5000)
     iss_now1()
+    st.rerun()
     
     with st.expander("People in Space Right Now"):
         number_of_people_now()
