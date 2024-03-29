@@ -8,7 +8,7 @@ from mypages import Volcanos as volcanos
 from mypages import Tests as tests
 from utils import tools as tool
 
-tool.hide_stremlit()
+# tool.hide_stremlit()
 
 def bg():
     # https://www.magicpattern.design/tools/css-backgrounds
