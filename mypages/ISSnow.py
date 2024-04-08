@@ -51,9 +51,7 @@ def iss_now1():
 
     # st.write(fig)
     st.map(pd_pos, zoom=3, use_container_width=True)
-    #st_autorefresh(interval=5000)
-    time.sleep(5)
-    st.rerun()
+    st_autorefresh(interval=5000)
 
 
 def iss():
