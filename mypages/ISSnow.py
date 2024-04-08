@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 from utils import tools as tool
+import time
 
 tool.streamlit_config(page_title="🛰️ ISS (International Space Station) Now", page_icon="🛰️")
 
