@@ -38,7 +38,8 @@ with st.sidebar:
         #}
     )
     with st.container(border=True):
-        st.write("by Berkehan & Bilge")
+        if st.button("by Berkehan & Bilge"):
+            st.balloons()
 
 if selected == "IpLocation":
     location_finder.get_ip_location()
