@@ -57,8 +57,7 @@ def iss_now1():
 
 
 def iss():
-    with st.container():
-        with st.expander("People in Space Right Now"):
-            number_of_people_now()
-        iss_now1()
-        
+    iss_now1()
+    with st.expander("People in Space Right Now"):
+        number_of_people_now()
+    
