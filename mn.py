@@ -38,7 +38,9 @@ with st.sidebar:
         #}
     )
     with st.container(border=True):
-        if st.button("by Berkehan & Bilge"):
+        if st.button("by Bilge"):
+            st.snow()
+        if st.button("by Berkehan"):
             st.balloons()
 
 if selected == "IpLocation":
