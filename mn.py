@@ -37,6 +37,8 @@ with st.sidebar:
         #    "nav-link-selected": {"background-color": "green"},
         #}
     )
+    with st.container(border=True)
+    st.write("by Berkehan & Bilge")
 
 if selected == "IpLocation":
     location_finder.get_ip_location()
