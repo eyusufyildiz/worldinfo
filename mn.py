@@ -5,6 +5,7 @@ from mypages import ISSnow as issnow
 from mypages import Earthquakes as earthquakes
 from mypages import Satellites as starlink
 from mypages import Volcanos as volcanos
+from mypages import Videos as videos
 from mypages import Tests as tests
 from utils import tools as tool
 
@@ -26,7 +27,7 @@ background-size: 10px 10px;
 bg()
 
 with st.sidebar:
-    selected = option_menu(None, ["IpLocation", "Earthquakes",  "Volcanos", 'Issnow', 'Satellites'], 
+    selected = option_menu(None, ["IpLocation", "Earthquakes",  "Volcanos", 'Issnow', 'Satellites', 'Music/Video'], 
         icons=['geo-alt', 'cloud-upload', "list-task", 'gear', 'broadcast-pin'], 
         menu_icon="gear", 
         default_index=1, 
@@ -53,5 +54,7 @@ elif selected =='Issnow':
     issnow.iss()
 elif selected =='Satellites':
     starlink.satellites()
+elif selected =='Music/Video':
+    videos.music_video() 
 
 # tool.show_globe()
