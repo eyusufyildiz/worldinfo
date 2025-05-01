@@ -11,7 +11,7 @@ def http_requests(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     return requests.get(url, headers=headers)
 
-def _get_volcanos():
+def get_volcanos():
     url1="https://volcano.oregonstate.edu/volcano_table"
     url2="https://volcano.oregonstate.edu/volcano_table?page=1"
     url3="https://volcano.oregonstate.edu/volcano_table?page=2"
@@ -36,7 +36,7 @@ def _get_volcanos():
 
 
 
-def get_volcanos():
+def _get_volcanos():
     volcan_file="GVP_Volcano_List_Holocene_202505011922.csv"
     volcanos = pd.read_csv(volcan_file)
     st.write(f"Number of volcanos 🌋: {len(volcanos)} from {url1}")
