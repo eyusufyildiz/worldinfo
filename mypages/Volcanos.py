@@ -26,7 +26,7 @@ def _get_volcanos():
 
     fig = tool.plotly_map(volcanos, lat="Latitude (dd)", lon="Longitude (dd)", 
                         title= "Volcanos", hover_name="Volcano Name", 
-                        hover_data=["Country",  "Elevation (m)", "Volcanic Region", "Last Known Eruption"])
+                        hover_data=["Country",  "Elevation (m)"])
 
     st.write(fig)
 
@@ -43,7 +43,7 @@ def get_volcanos():
 
     fig = tool.plotly_map(volcanos, lat="Latitude", lon="Longitude", 
                         title= "Volcanos", hover_name="Volcano Name", 
-                        hover_data=["Country",  "Elevation (m)"])
+                        hover_data=["Country",  "Elevation (m)", "Volcanic Region", "Last Known Eruption"])
 
     st.write(fig)
 
