@@ -37,7 +37,7 @@ def _get_volcanos():
 
 
 def get_volcanos():
-    volcan_file="./GVP_Volcano_List_Holocene_202505011922.csv"
+    volcan_file="mypages/mzk/GVP_Volcano_List_Holocene_202505011922.csv"
     volcanos = pd.read_csv(volcan_file)
     st.write(f"Number of volcanos 🌋: {len(volcanos)} from {url1}")
 
