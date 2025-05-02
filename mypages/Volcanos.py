@@ -39,7 +39,7 @@ def _get_volcanos():
 def get_volcanos():
     volcan_file="mypages/mzk/GVP_Volcano_List_Holocene_202505011922.csv"
     volcanos = pd.read_csv(volcan_file)
-    st.write(f"Number of volcanos 🌋: {len(volcanos)} from {url1}")
+    st.write(f"Number of volcanos 🌋: {len(volcanos)}")
 
     fig = tool.plotly_map(volcanos, lat="Latitude", lon="Longitude", 
                         title= "Volcanos", hover_name="Volcano Name", 
