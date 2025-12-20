@@ -56,38 +56,39 @@ def download_video(url, res):
 # ----------------------------
 # Run Detection
 # ----------------------------
-if start and youtube_url:
-    with st.spinner("Downloading video..."):
-        video_path = download_video(youtube_url, resolution)
-
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-
-    frame_placeholder = st.empty()
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        # YOLO inference
-        results = model.predict(
-            frame,
-            conf=confidence,
-            imgsz=640,
-            device=0 if torch.cuda.is_available() else "cpu",
-            half=torch.cuda.is_available(),
-            verbose=False
-        )
-
-        annotated = results[0].plot()
-
-        frame_placeholder.image(
-            annotated,
-            channels="BGR",
-            use_container_width=True
-        )
-
-    cap.release()
-    os.remove(video_path)
-    st.success("Detection completed ✔")
+def app():
+    if start and youtube_url:
+        with st.spinner("Downloading video..."):
+            video_path = download_video(youtube_url, resolution)
+    
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+    
+        frame_placeholder = st.empty()
+    
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+    
+            # YOLO inference
+            results = model.predict(
+                frame,
+                conf=confidence,
+                imgsz=640,
+                device=0 if torch.cuda.is_available() else "cpu",
+                half=torch.cuda.is_available(),
+                verbose=False
+            )
+    
+            annotated = results[0].plot()
+    
+            frame_placeholder.image(
+                annotated,
+                channels="BGR",
+                use_container_width=True
+            )
+    
+        cap.release()
+        os.remove(video_path)
+        st.success("Detection completed ✔")
