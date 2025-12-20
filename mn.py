@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 from mypages import IpLocation as location_finder
-from mypages import object-detection as object_detection
+from mypages import object_detection as object_detection
 from mypages import ISSnow as issnow
 from mypages import Earthquakes as earthquakes
 from mypages import Satellites as starlink
