@@ -6,17 +6,20 @@ from PIL import Image
 import torch
 import time
 
+# ----------------------------
+# Streamlit page setup
+# ----------------------------
 st.set_page_config(layout="wide")
 st.title("📺 YouTube Object Detection (Streamlit Cloud)")
 
 # ----------------------------
-# Streamlit UI Setup
+# User Inputs
 # ----------------------------
 youtube_url = st.text_input(
     "YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM"
 )
 resolution = st.selectbox(
-    "Select resolution for download",
+    "Select video resolution",
     ["144p", "240p", "360p", "480p", "720p", "1080p"],
     index=4
 )
@@ -24,11 +27,11 @@ confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
 start = st.button("▶ Start Detection")
 
 # ----------------------------
-# Load YOLO Model
+# Load YOLO model
 # ----------------------------
 @st.cache_resource
 def load_model():
-    model = YOLO("yolov8n.pt")
+    model = YOLO("yolov8n.pt")  # lightweight & fast
     if torch.cuda.is_available():
         model.to("cuda")
         model.fuse()
@@ -37,9 +40,10 @@ def load_model():
 model = load_model()
 
 # ----------------------------
-# Get YouTube Stream URL
+# Get YouTube stream URL
 # ----------------------------
 def get_stream_url(youtube_url, resolution):
+    """Return direct stream URL using yt-dlp without printing logs."""
     try:
         result = subprocess.run(
             [
@@ -56,13 +60,13 @@ def get_stream_url(youtube_url, resolution):
         return result.stdout.strip()
     except subprocess.CalledProcessError:
         st.error(
-            "Failed to get stream URL. Ensure yt-dlp and ffmpeg are installed "
+            "Failed to get stream URL. Make sure yt-dlp and ffmpeg are installed "
             "and the video is accessible."
         )
         return None
 
 # ----------------------------
-# Run Detection
+# Run object detection
 # ----------------------------
 if start and youtube_url:
     stream_url = get_stream_url(youtube_url, resolution)
@@ -77,6 +81,7 @@ if start and youtube_url:
             frame_skip = 2
             frame_count = 0
 
+            # Pause / Resume button
             paused = False
             pause_button = st.button("⏸ Pause / Resume")
 
@@ -96,7 +101,7 @@ if start and youtube_url:
                 if frame_count % frame_skip != 0:
                     continue
 
-                # Resize for speed
+                # Resize frame for speed
                 frame = cv2.resize(frame, (1280, 768))
 
                 # YOLO detection
@@ -106,14 +111,14 @@ if start and youtube_url:
                 except Exception:
                     continue  # skip frame silently
 
-                # Convert BGR → RGB for Streamlit
+                # Convert BGR → RGB for Streamlit display
                 annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
 
-                # Display frame
+                # Display frame in Streamlit
                 frame_placeholder.image(
                     annotated,
                     channels="RGB",
-                    width=800  # width instead of deprecated use_column_width
+                    width=800  # use width instead of deprecated use_column_width
                 )
 
                 time.sleep(0.03)  # smooth playback
