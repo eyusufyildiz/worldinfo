@@ -10,7 +10,7 @@ from ultralytics import YOLO
 # Streamlit UI
 # ----------------------------
 st.set_page_config(layout="wide")
-st.title("📺 YouTube Object Detection (Fast & Accurate)")
+st.title("📺 YouTube Object Detection (Streamlit Cloud Compatible)")
 
 youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=H3JYmEYC1pk")
 resolution = st.selectbox(
@@ -18,16 +18,15 @@ resolution = st.selectbox(
     ["144p", "240p", "360p", "480p", "720p", "1080p"],
     index=4
 )
-
 confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
 start = st.button("▶ Start Detection")
 
 # ----------------------------
-# YOLO Model (Best Accuracy)
+# Load YOLO Model (cached)
 # ----------------------------
 @st.cache_resource
 def load_model():
-    model = YOLO("yolov8l.pt")   # best balance accuracy/speed
+    model = YOLO("yolov8l.pt")  # High accuracy model
     if torch.cuda.is_available():
         model.to("cuda")
         model.fuse()
@@ -40,14 +39,12 @@ model = load_model()
 # ----------------------------
 def download_video(url, res):
     height = int(res.replace("p", ""))
-
     ydl_opts = {
         "format": f"bestvideo[height<={height}]+bestaudio/best",
         "merge_output_format": "mp4",
         "outtmpl": "%(id)s.%(ext)s",
         "quiet": True
     }
-
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filename = ydl.prepare_filename(info)
@@ -56,21 +53,23 @@ def download_video(url, res):
 # ----------------------------
 # Run Detection
 # ----------------------------
-def app():
-    if start and youtube_url:
-        with st.spinner("Downloading video..."):
-            video_path = download_video(youtube_url, resolution)
-    
-        cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-    
+if start and youtube_url:
+    with st.spinner("Downloading video..."):
+        video_path = download_video(youtube_url, resolution)
+
+    # Use temporary file to avoid Streamlit Cloud write issues
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        st.error("Failed to open video.")
+    else:
         frame_placeholder = st.empty()
-    
-        while cap.isOpened():
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24  # fallback fps
+
+        while True:
             ret, frame = cap.read()
             if not ret:
                 break
-    
+
             # YOLO inference
             results = model.predict(
                 frame,
@@ -80,15 +79,17 @@ def app():
                 half=torch.cuda.is_available(),
                 verbose=False
             )
-    
-            annotated = results[0].plot()
-    
+
+            # Annotate frame
+            annotated_frame = results[0].plot()
+
+            # Display in Streamlit
             frame_placeholder.image(
-                annotated,
+                annotated_frame,
                 channels="BGR",
-                use_container_width=True
+                use_column_width=True
             )
-    
+
         cap.release()
         os.remove(video_path)
         st.success("Detection completed ✔")
