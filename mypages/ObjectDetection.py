@@ -26,6 +26,8 @@ resolution = st.selectbox(
 confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
 start = st.button("▶ Start Detection")
 
+
+
 # ----------------------------
 # Load YOLO model
 # ----------------------------
