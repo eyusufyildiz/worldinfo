@@ -7,7 +7,7 @@ from mypages import Earthquakes as earthquakes
 from mypages import Satellites as starlink
 from mypages import Volcanos as volcanos
 from mypages import Videos as videos
-from mypages import Tests as tests
+#from mypages import Tests as tests
 from utils import tools as tool
 
 # tool.hide_stremlit()
