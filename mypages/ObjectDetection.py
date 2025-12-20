@@ -1,163 +1,83 @@
+# streamlit_yolo.py
 import streamlit as st
 import cv2
-import yt_dlp
-import time
+import subprocess
 from ultralytics import YOLO
+from PIL import Image
+import numpy as np
+import tempfile
+import time
+import os
 
-# ================= CONFIG =================
-DEFAULT_YOUTUBE_URL = "https://www.youtube.com/watch?v=ztmY_cCtUl0"
-DEFAULT_RESOLUTION = (854, 480)
-MAX_RETRIES = 3
-# =========================================
+st.title("YouTube YOLO Object Detection")
 
+# --- User inputs ---
+youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
+cookies_file = st.file_uploader("Upload cookies.txt (from browser, optional)", type=["txt"])
 
+# Load YOLO model
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8n.pt")  # nano = fastest
+    return YOLO("yolov8n.pt")
 
+model = load_model()
 
-def get_stream_url(youtube_url: str) -> str:
-    """
-    Always prefer HLS (m3u8) – most stable in Streamlit Cloud
-    """
-    ydl_opts = {
-        "quiet": True,
-        'cookies': '/tmp/cookies.txt',
-        "format": "best",
-        "noplaylist": True,
-        "live_from_start": True,
-        "extractor_args": {
-            "youtube": {
-                "skip": ["dash"],
-            }
-        },
-    }
+# --- Helper to get stream URL ---
+def get_stream_url(youtube_url, cookies_path=None):
+    cmd = ["yt-dlp", "-f", "best[ext=mp4]", "-g", youtube_url]
+    if cookies_path:
+        cmd.insert(1, "--cookies")
+        cmd.insert(2, cookies_path)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        st.error(f"Error fetching stream URL:\n{result.stderr}")
+        return None
+    return result.stdout.strip()
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=False)
+# --- Main ---
+if st.button("Start Detection"):
+    if not youtube_url:
+        st.warning("Please enter a YouTube URL.")
+    else:
+        # Save uploaded cookies file temporarily
+        cookies_path = None
+        if cookies_file:
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                tmp.write(cookies_file.read())
+                cookies_path = tmp.name
 
-        if "hlsManifestUrl" in info:
-            return info["hlsManifestUrl"]
+        stream_url = get_stream_url(youtube_url, cookies_path)
+        if not stream_url:
+            st.stop()
 
-        return info["url"]
+        stframe = st.empty()
+        cap = cv2.VideoCapture(stream_url)
+        frame_skip = 2
+        frame_count = 0
 
-
-def main():
-    st.set_page_config(
-        page_title="YouTube Live Object Detection (YOLOv8)",
-        layout="wide",
-    )
-
-    st.title("🎥 YouTube Live Object Detection (YOLOv8)")
-    st.caption("Runs fully inside Streamlit Cloud (CPU-only, HLS, auto-reconnect).")
-
-    # -------- Sidebar controls --------
-    #with st.sidebar:
-    youtube_url = st.text_input(
-        "YouTube URL",
-        DEFAULT_YOUTUBE_URL,
-    )
-
-    confidence = st.slider(
-        "Detection confidence",
-        0.1,
-        0.9,
-        0.5,
-        0.05,
-    )
-
-    resolution = st.selectbox(
-        "Resolution",
-        [(640, 360), (854, 480), (1280, 720)],
-        index=1,
-    )
-
-    start = st.button("▶ Start")
-    stop = st.button("⏹ Stop")
-
-    # -------- State --------
-    if "run" not in st.session_state:
-        st.session_state.run = False
-
-    if start:
-        st.session_state.run = True
-
-    if stop:
-        st.session_state.run = False
-
-    frame_placeholder = st.empty()
-    fps_placeholder = st.empty()
-    status_placeholder = st.empty()
-
-    if not st.session_state.run:
-        status_placeholder.info("Click ▶ Start to begin detection.")
-        return
-
-    # -------- Load model --------
-    model = load_model()
-
-    # -------- Open stream --------
-    try:
-        stream_url = get_stream_url(youtube_url)
-    except Exception as e:
-        st.error(f"Failed to extract stream URL: {e}")
-        return
-
-    cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
-
-    retries = 0
-    prev_time = time.time()
-
-    # -------- Streaming loop --------
-    while st.session_state.run:
-        ret, frame = cap.read()
-
-        if not ret:
-            retries += 1
-            status_placeholder.warning("Stream expired – reconnecting...")
-            cap.release()
-            time.sleep(2)
-
-            if retries > MAX_RETRIES:
-                st.error("YouTube stream blocked or expired.")
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
                 break
 
-            stream_url = get_stream_url(youtube_url)
-            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-            continue
+            frame_count += 1
+            if frame_count % frame_skip != 0:
+                continue
 
-        retries = 0
+            # Resize for speed
+            frame = cv2.resize(frame, (1280, 768))
 
-        frame = cv2.resize(frame, resolution)
+            # YOLO detection
+            results = model(frame, conf=0.4)
+            annotated = results[0].plot()
 
-        # YOLO inference (CPU-safe)
-        results = model(
-            frame,
-            conf=confidence,
-            imgsz=resolution[0],
-            device="cpu",
-            verbose=False,
-        )
+            # BGR -> RGB
+            annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(annotated)
 
-        annotated = results[0].plot()
-        annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+            stframe.image(img, use_column_width=True)
+            time.sleep(0.03)
 
-        frame_placeholder.image(
-            annotated,
-            use_container_width=True,
-        )
-
-        # FPS
-        now = time.time()
-        fps = 1 / (now - prev_time)
-        prev_time = now
-        fps_placeholder.markdown(f"**FPS:** {fps:.2f}")
-
-    cap.release()
-    status_placeholder.success("Detection stopped.")
-
-
-if __name__ == "__main__":
-    main()
+        cap.release()
+        if cookies_path:
+            os.remove(cookies_path)
