@@ -13,7 +13,8 @@ geopy
 
 # Object Detection
 yt-dlp 
-opencv-python 
+#opencv-python 
+opencv-python-headless
 ultralytics 
 torch 
 torchvision
