@@ -1,163 +1,61 @@
 import streamlit as st
 import cv2
-import yt_dlp
-import time
 from ultralytics import YOLO
-
-# ================= CONFIG =================
-DEFAULT_YOUTUBE_URL = "https://www.youtube.com/watch?v=ztmY_cCtUl0"
-DEFAULT_RESOLUTION = (854, 480)
-MAX_RETRIES = 3
-# =========================================
-
-
-@st.cache_resource
-def load_model():
-    return YOLO("yolov8n.pt")  # nano = fastest
-
-
-def get_stream_url(youtube_url: str) -> str:
-    """
-    Always prefer HLS (m3u8) – most stable in Streamlit Cloud
-    """
-    ydl_opts = {
-        "quiet": True,
-        'cookies': '/tmp/cookies.txt',
-        "format": "best",
-        "noplaylist": True,
-        "live_from_start": True,
-        "extractor_args": {
-            "youtube": {
-                "skip": ["dash"],
-            }
-        },
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=False)
-
-        if "hlsManifestUrl" in info:
-            return info["hlsManifestUrl"]
-
-        return info["url"]
-
+from cap_from_youtube import cap_from_youtube
 
 def main():
-    st.set_page_config(
-        page_title="YouTube Live Object Detection (YOLOv8)",
-        layout="wide",
-    )
+    st.set_page_config(page_title="YouTube Object Detector", layout="wide")
+    st.title("🚀 YouTube Video Object Detection")
 
-    st.title("🎥 YouTube Live Object Detection (YOLOv8)")
-    st.caption("Runs fully inside Streamlit Cloud (CPU-only, HLS, auto-reconnect).")
+    # --- Sidebar Configuration ---
+    st.sidebar.header("Detection Settings")
+    
+    # Model Selection
+    model_type = st.sidebar.selectbox("Select YOLO Model", ["yolo11n.pt", "yolo11s.pt", "yolo11m.pt"])
+    
+    # Confidence Threshold
+    conf_threshold = st.sidebar.slider("Detection Confidence", 0.0, 1.0, 0.45, 0.05)
+    
+    # Resolution Options
+    resolution = st.sidebar.selectbox("Stream Resolution", ["360p", "480p", "720p", "1080p"], index=0)
+    
+    # YouTube URL Input
+    url = st.sidebar.text_input("YouTube URL", "https://www.youtube.com/watch?v=MNn9qKG2UFI")
 
-    # -------- Sidebar controls --------
-    #with st.sidebar:
-    youtube_url = st.text_input(
-        "YouTube URL",
-        DEFAULT_YOUTUBE_URL,
-    )
-
-    confidence = st.slider(
-        "Detection confidence",
-        0.1,
-        0.9,
-        0.5,
-        0.05,
-    )
-
-    resolution = st.selectbox(
-        "Resolution",
-        [(640, 360), (854, 480), (1280, 720)],
-        index=1,
-    )
-
-    start = st.button("▶ Start")
-    stop = st.button("⏹ Stop")
-
-    # -------- State --------
-    if "run" not in st.session_state:
-        st.session_state.run = False
-
-    if start:
-        st.session_state.run = True
-
-    if stop:
-        st.session_state.run = False
-
-    frame_placeholder = st.empty()
-    fps_placeholder = st.empty()
-    status_placeholder = st.empty()
-
-    if not st.session_state.run:
-        status_placeholder.info("Click ▶ Start to begin detection.")
-        return
-
-    # -------- Load model --------
-    model = load_model()
-
-    # -------- Open stream --------
+    # --- Logic ---
+    #if st.sidebar.button("Start Detection"):
     try:
-        stream_url = get_stream_url(youtube_url)
-    except Exception as e:
-        st.error(f"Failed to extract stream URL: {e}")
-        return
+        # Load Model
+        model = YOLO(model_type)
+        
+        # Initialize YouTube Stream
+        cap = cap_from_youtube(url, resolution)
+        
+        # Create a placeholder for the video frame
+        st_frame = st.empty()
 
-    cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
-
-    retries = 0
-    prev_time = time.time()
-
-    # -------- Streaming loop --------
-    while st.session_state.run:
-        ret, frame = cap.read()
-
-        if not ret:
-            retries += 1
-            status_placeholder.warning("Stream expired – reconnecting...")
-            cap.release()
-            time.sleep(2)
-
-            if retries > MAX_RETRIES:
-                st.error("YouTube stream blocked or expired.")
+        while cap.isOpened():
+            success, frame = cap.read()
+            if not success:
+                st.warning("Finished processing or unable to fetch frame.")
                 break
 
-            stream_url = get_stream_url(youtube_url)
-            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-            continue
+            # Run Inference
+            results = model.predict(frame, conf=conf_threshold, verbose=False)
 
-        retries = 0
+            # Plot results on frame
+            annotated_frame = results[0].plot()
 
-        frame = cv2.resize(frame, resolution)
+            # Convert BGR to RGB for Streamlit
+            annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
 
-        # YOLO inference (CPU-safe)
-        results = model(
-            frame,
-            conf=confidence,
-            imgsz=resolution[0],
-            device="cpu",
-            verbose=False,
-        )
+            # Display frame
+            st_frame.image(annotated_frame, channels="RGB", use_container_width=True)
 
-        annotated = results[0].plot()
-        annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+        cap.release()
 
-        frame_placeholder.image(
-            annotated,
-            use_container_width=True,
-        )
-
-        # FPS
-        now = time.time()
-        fps = 1 / (now - prev_time)
-        prev_time = now
-        fps_placeholder.markdown(f"**FPS:** {fps:.2f}")
-
-    cap.release()
-    status_placeholder.success("Detection stopped.")
-
+    except Exception as e:
+            st.error(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
