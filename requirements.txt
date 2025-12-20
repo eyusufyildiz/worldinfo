@@ -20,3 +20,4 @@ torch
 torchvision
 onnxruntime-gpu
 ffmpeg
+cap_from_youtube
