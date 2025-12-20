@@ -22,6 +22,7 @@ def get_stream_url(youtube_url: str) -> str:
     """
     ydl_opts = {
         "quiet": True,
+        'cookies': 'cookies.txt',
         "format": "best",
         "noplaylist": True,
         "live_from_start": True,
