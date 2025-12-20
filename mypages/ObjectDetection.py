@@ -9,18 +9,10 @@ import tempfile
 import time
 import os
 
-st.title("YouTube YOLO Object Detection")
-
-# --- User inputs ---
-youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
-cookies_file = st.file_uploader("Upload cookies.txt (from browser, optional)", type=["txt"])
-
-# Load YOLO model
+# --- Load YOLO model once ---
 @st.cache_resource
 def load_model():
     return YOLO("yolov8n.pt")
-
-model = load_model()
 
 # --- Helper to get stream URL ---
 def get_stream_url(youtube_url, cookies_path=None):
@@ -34,11 +26,21 @@ def get_stream_url(youtube_url, cookies_path=None):
         return None
     return result.stdout.strip()
 
-# --- Main ---
-if st.button("Start Detection"):
-    if not youtube_url:
-        st.warning("Please enter a YouTube URL.")
-    else:
+# --- Main Streamlit app ---
+def main():
+    st.title("YouTube YOLO Object Detection")
+
+    # User inputs
+    youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
+    cookies_file = st.file_uploader("Upload cookies.txt (from browser, optional)", type=["txt"])
+
+    model = load_model()
+
+    if st.button("Start Detection"):
+        if not youtube_url:
+            st.warning("Please enter a YouTube URL.")
+            return
+
         # Save uploaded cookies file temporarily
         cookies_path = None
         if cookies_file:
@@ -46,9 +48,10 @@ if st.button("Start Detection"):
                 tmp.write(cookies_file.read())
                 cookies_path = tmp.name
 
+        # Get the video stream URL
         stream_url = get_stream_url(youtube_url, cookies_path)
         if not stream_url:
-            st.stop()
+            return
 
         stframe = st.empty()
         cap = cv2.VideoCapture(stream_url)
@@ -71,7 +74,7 @@ if st.button("Start Detection"):
             results = model(frame, conf=0.4)
             annotated = results[0].plot()
 
-            # BGR -> RGB
+            # Convert BGR → RGB
             annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(annotated)
 
@@ -81,3 +84,7 @@ if st.button("Start Detection"):
         cap.release()
         if cookies_path:
             os.remove(cookies_path)
+
+# --- Entry point ---
+if __name__ == "__main__":
+    main()
