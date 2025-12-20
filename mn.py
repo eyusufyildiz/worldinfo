@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 from mypages import IpLocation as location_finder
-from mypages import object_detection as object_detection
+from mypages import ObjectDetection as object_detection
 from mypages import ISSnow as issnow
 from mypages import Earthquakes as earthquakes
 from mypages import Satellites as starlink
@@ -48,7 +48,7 @@ with st.sidebar:
 if selected == "IpLocation":
     location_finder.get_ip_location()
 elif selected == "Object Detection":
-    object_detection.object_detection() 
+    object_detection.app() 
 elif selected == "Earthquakes":
     earthquakes.quakes()
 elif selected == "Volcanos":
