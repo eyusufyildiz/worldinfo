@@ -10,3 +10,11 @@ pandas
 plotly
 lxml
 geopy
+
+# Object Detection
+yt-dlp 
+opencv-python 
+ultralytics 
+torch 
+torchvision
+onnxruntime-gpu
