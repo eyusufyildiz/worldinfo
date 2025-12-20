@@ -1,22 +1,19 @@
 import streamlit as st
 import cv2
-import tempfile
-import os
-import yt_dlp
-import torch
+import subprocess
 from ultralytics import YOLO
+from PIL import Image
+import numpy as np
+import time
+
+st.set_page_config(layout="wide")
+st.title("📺 YouTube Live Object Detection (Streamlit Cloud)")
 
 # ----------------------------
 # Streamlit UI
 # ----------------------------
-st.set_page_config(layout="wide")
-st.title("📺 YouTube Object Detection (Streamlit Cloud Compatible)")
-
-youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=H3JYmEYC1pk")
-resolution = st.selectbox(
-    "Select video resolution",
-    ["144p", "240p", "360p", "480p", "720p", "1080p"],
-    index=4
+youtube_url = st.text_input(
+    "YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM"
 )
 confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
 start = st.button("▶ Start Detection")
@@ -26,70 +23,71 @@ start = st.button("▶ Start Detection")
 # ----------------------------
 @st.cache_resource
 def load_model():
-    model = YOLO("yolov8l.pt")  # High accuracy model
+    model = YOLO("yolov8n.pt")  # Lightweight & fast
     if torch.cuda.is_available():
         model.to("cuda")
         model.fuse()
     return model
 
+import torch
 model = load_model()
 
 # ----------------------------
-# Download YouTube Video
+# Get stream URL
 # ----------------------------
-def download_video(url, res):
-    height = int(res.replace("p", ""))
-    ydl_opts = {
-        "format": f"bestvideo[height<={height}]+bestaudio/best",
-        "merge_output_format": "mp4",
-        "outtmpl": "%(id)s.%(ext)s",
-        "quiet": True
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
-        return filename.replace(".webm", ".mp4")
+def get_stream_url(youtube_url):
+    """Get direct stream URL from YouTube using yt-dlp"""
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "-f", "best[ext=mp4]", "-g", youtube_url],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        st.error("Failed to get stream URL. Make sure yt-dlp and ffmpeg are installed.")
+        return None
 
 # ----------------------------
 # Run Detection
 # ----------------------------
 if start and youtube_url:
-    with st.spinner("Downloading video..."):
-        video_path = download_video(youtube_url, resolution)
+    stream_url = get_stream_url(youtube_url)
+    if stream_url:
+        cap = cv2.VideoCapture(stream_url)
+        if not cap.isOpened():
+            st.error("Failed to open video stream.")
+        else:
+            frame_placeholder = st.empty()
+            frame_skip = 2
+            frame_count = 0
 
-    # Use temporary file to avoid Streamlit Cloud write issues
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        st.error("Failed to open video.")
-    else:
-        frame_placeholder = st.empty()
-        fps = cap.get(cv2.CAP_PROP_FPS) or 24  # fallback fps
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+                frame_count += 1
+                if frame_count % frame_skip != 0:
+                    continue
 
-            # YOLO inference
-            results = model.predict(
-                frame,
-                conf=confidence,
-                imgsz=640,
-                device=0 if torch.cuda.is_available() else "cpu",
-                half=torch.cuda.is_available(),
-                verbose=False
-            )
+                # Resize for speed
+                frame = cv2.resize(frame, (1280, 768))
 
-            # Annotate frame
-            annotated_frame = results[0].plot()
+                # Run detection
+                results = model(frame, conf=confidence)
+                annotated = results[0].plot()
 
-            # Display in Streamlit
-            frame_placeholder.image(
-                annotated_frame,
-                channels="BGR",
-                use_column_width=True
-            )
+                # Convert BGR → RGB for Streamlit
+                annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+                frame_placeholder.image(
+                    annotated,
+                    channels="RGB",
+                    use_column_width=True
+                )
 
-        cap.release()
-        os.remove(video_path)
-        st.success("Detection completed ✔")
+                time.sleep(0.03)  # smooth playback
+
+            cap.release()
+            st.success("Detection completed ✔")
