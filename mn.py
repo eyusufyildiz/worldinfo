@@ -48,7 +48,7 @@ with st.sidebar:
 if selected == "IpLocation":
     location_finder.get_ip_location()
 elif selected == "Object Detection":
-    object_detection.app() 
+    object_detection
     #pass
 elif selected == "Earthquakes":
     earthquakes.quakes()
