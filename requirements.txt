@@ -19,3 +19,4 @@ ultralytics
 torch 
 torchvision
 onnxruntime-gpu
+ffmpeg
