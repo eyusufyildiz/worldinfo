@@ -51,28 +51,28 @@ def main():
     st.caption("Runs fully inside Streamlit Cloud (CPU-only, HLS, auto-reconnect).")
 
     # -------- Sidebar controls --------
-    with st.sidebar:
-        youtube_url = st.text_input(
-            "YouTube URL",
-            DEFAULT_YOUTUBE_URL,
-        )
+    #with st.sidebar:
+    youtube_url = st.text_input(
+        "YouTube URL",
+        DEFAULT_YOUTUBE_URL,
+    )
 
-        confidence = st.slider(
-            "Detection confidence",
-            0.1,
-            0.9,
-            0.5,
-            0.05,
-        )
+    confidence = st.slider(
+        "Detection confidence",
+        0.1,
+        0.9,
+        0.5,
+        0.05,
+    )
 
-        resolution = st.selectbox(
-            "Resolution",
-            [(640, 360), (854, 480), (1280, 720)],
-            index=1,
-        )
+    resolution = st.selectbox(
+        "Resolution",
+        [(640, 360), (854, 480), (1280, 720)],
+        index=1,
+    )
 
-        start = st.button("▶ Start")
-        stop = st.button("⏹ Stop")
+    start = st.button("▶ Start")
+    stop = st.button("⏹ Stop")
 
     # -------- State --------
     if "run" not in st.session_state:
