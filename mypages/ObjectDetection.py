@@ -23,17 +23,20 @@ def load_model():
 def get_stream_url(youtube_url, resolution):
     """Return direct stream URL using yt-dlp without printing logs."""
     try:
+        # Clean the resolution string (e.g., '720p' -> '720')
+        res_limit = resolution.replace('p', '')
+        
         result = subprocess.run(
             [
                 "yt-dlp", 
-                "-f", f"bestvideo[height<={resolution.replace('p','') punch}]+bestaudio/best",
+                "-f", f"bestvideo[height<={res_limit}]+bestaudio/best",
                 "-g", youtube_url,
             ],
             capture_output=True,
             text=True,
             check=True,
         )
-        # yt-dlp -g can return two lines (video and audio), we take the first (video)
+        # yt-dlp -g can return two lines (video and audio), we take the first
         return result.stdout.strip().split('\n')[0]
     except subprocess.CalledProcessError:
         st.error(
