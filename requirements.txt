@@ -12,7 +12,7 @@ lxml
 geopy
 
 # Object Detection
-# yt-dlp 
+yt-dlp 
 #opencv-python 
 opencv-python-headless
 ultralytics 
@@ -22,4 +22,4 @@ onnxruntime-gpu
 ffmpeg
 cap_from_youtube
 # This fetches the latest fixes for SABR streaming
-yt-dlp @ git+https://github.com/yt-dlp/yt-dlp.git@master
+psutil
