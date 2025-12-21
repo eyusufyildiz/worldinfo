@@ -41,16 +41,12 @@ def main():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        res_choice = st.selectbox(
-            "Stream Resolution", 
-            ["360p", "480p", "720p"], 
-            index=0
-        )
-        # Updated resolution mapping for better compatibility
+        res_choice = st.selectbox("Stream Resolution", ["360p", "480p", "720p"], index=0)
+        # Force mp4 and specific callsign to avoid SABR formats
         res_map = {
-            "360p": "best[height<=360][ext=mp4]", 
-            "480p": "best[height<=480][ext=mp4]", 
-            "720p": "best[height<=720][ext=mp4]"
+            "360p": "18",   # 18 is usually 360p mp4
+            "480p": "135+140/best", 
+            "720p": "22"    # 22 is usually 720p mp4
         }
 
     with col2:
@@ -61,24 +57,26 @@ def main():
 
     if run_btn and url:
         try:
-            # Enhanced yt-dlp options to bypass SABR/Client issues
+            # More robust yt-dlp configuration
             ydl_opts = {
                 'format': res_map[res_choice],
                 'quiet': True,
                 'no_warnings': True,
-                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'force_generic_extractor': False,
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 stream_url = info['url']
 
-            # Create VideoCapture
-            cap = cv2.VideoCapture(stream_url)
+            # FORCE FFMPEG backend to prevent the "CAP_IMAGES" error
+            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
             
-            # Check if video opened successfully
+            # Reduce buffer size to minimize latency
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+
             if not cap.isOpened():
-                st.error("OpenCV could not open the stream. YouTube may be throttling the request.")
+                st.error("OpenCV still cannot open the stream. Try a different resolution (360p is most stable).")
                 return
 
             model = load_yolo_model()
@@ -87,20 +85,24 @@ def main():
             while cap.isOpened() and run_btn:
                 ret, frame = cap.read()
                 if not ret:
-                    # Some streams require a brief pause or retry
+                    # Brief retry logic for network hiccups
                     time.sleep(0.1)
                     continue
 
+                # Calculate FPS
                 curr_time = time.time()
                 fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
                 prev_time = curr_time
 
+                # Run YOLO
                 results = model(frame, conf=conf_threshold, verbose=False)
                 annotated_frame = results[0].plot() 
                 annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                 
+                # Update UI
                 frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
 
+                # Update Stats
                 stats = get_system_stats()
                 cpu_metric.metric("CPU Usage", f"{stats['cpu']}%")
                 ram_metric.metric("RAM Usage", f"{stats['ram']}%")
