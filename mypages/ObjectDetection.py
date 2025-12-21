@@ -42,11 +42,11 @@ def main():
     
     with col1:
         res_choice = st.selectbox("Stream Resolution", ["360p", "480p", "720p"], index=0)
-        # Using specific format strings that are most compatible with OpenCV FFmpeg
+        # 18 is the itag for 360p MP4 (most compatible with OpenCV)
         res_map = {
-            "360p": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]",
-            "480p": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]",
-            "720p": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]"
+            "360p": "18/best",
+            "480p": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]",
+            "720p": "22/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best"
         }
 
     with col2:
@@ -57,29 +57,24 @@ def main():
 
     if run_btn and url:
         try:
-            # We use yt-dlp to get the direct stream link
+            # yt-dlp setup with browser impersonation to bypass throttling
             ydl_opts = {
                 'format': res_map[res_choice],
                 'quiet': True,
                 'no_warnings': True,
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-                # yt-dlp might return a list of formats; we take the first 'url'
                 stream_url = info.get('url', None)
 
             if not stream_url:
-                st.error("Could not extract stream URL. Try another video.")
+                st.error("Could not extract stream URL.")
                 return
 
-            # Open with FFmpeg explicitly
+            # Initialize Capture
             cap = cv2.VideoCapture(stream_url)
-            
-            # This is a key fix: If the first attempt fails, we try forcing the backend
-            if not cap.isOpened():
-                cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-
             model = load_yolo_model()
             prev_time = 0
             
@@ -87,10 +82,8 @@ def main():
                 ret, frame = cap.read()
                 
                 if not ret:
-                    # Retry logic: YouTube streams often "hiccup"
-                    st.write("Retrying stream connection...")
-                    time.sleep(1)
-                    cap = cv2.VideoCapture(stream_url)
+                    # Small sleep to allow buffer to refill
+                    time.sleep(0.1)
                     continue
 
                 # FPS Calculation
@@ -103,8 +96,8 @@ def main():
                 annotated_frame = results[0].plot() 
                 annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                 
-                # Display
-                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
+                # UPDATED: Use width='stretch' instead of use_container_width
+                frame_placeholder.image(annotated_frame, channels="RGB", width='stretch')
 
                 # Update Stats
                 stats = get_system_stats()
