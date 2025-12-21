@@ -42,11 +42,11 @@ def main():
     
     with col1:
         res_choice = st.selectbox("Stream Resolution", ["360p", "480p", "720p"], index=0)
-        # Force mp4 and specific callsign to avoid SABR formats
+        # Using specific format strings that are most compatible with OpenCV FFmpeg
         res_map = {
-            "360p": "18",   # 18 is usually 360p mp4
-            "480p": "135+140/best", 
-            "720p": "22"    # 22 is usually 720p mp4
+            "360p": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]",
+            "480p": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]",
+            "720p": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]"
         }
 
     with col2:
@@ -57,65 +57,31 @@ def main():
 
     if run_btn and url:
         try:
-            # More robust yt-dlp configuration
+            # We use yt-dlp to get the direct stream link
             ydl_opts = {
                 'format': res_map[res_choice],
                 'quiet': True,
                 'no_warnings': True,
-                'force_generic_extractor': False,
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-                stream_url = info['url']
+                # yt-dlp might return a list of formats; we take the first 'url'
+                stream_url = info.get('url', None)
 
-            # FORCE FFMPEG backend to prevent the "CAP_IMAGES" error
-            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-            
-            # Reduce buffer size to minimize latency
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
-
-            if not cap.isOpened():
-                st.error("OpenCV still cannot open the stream. Try a different resolution (360p is most stable).")
+            if not stream_url:
+                st.error("Could not extract stream URL. Try another video.")
                 return
+
+            # Open with FFmpeg explicitly
+            cap = cv2.VideoCapture(stream_url)
+            
+            # This is a key fix: If the first attempt fails, we try forcing the backend
+            if not cap.isOpened():
+                cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
 
             model = load_yolo_model()
             prev_time = 0
             
             while cap.isOpened() and run_btn:
-                ret, frame = cap.read()
-                if not ret:
-                    # Brief retry logic for network hiccups
-                    time.sleep(0.1)
-                    continue
-
-                # Calculate FPS
-                curr_time = time.time()
-                fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
-                prev_time = curr_time
-
-                # Run YOLO
-                results = model(frame, conf=conf_threshold, verbose=False)
-                annotated_frame = results[0].plot() 
-                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                
-                # Update UI
-                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
-
-                # Update Stats
-                stats = get_system_stats()
-                cpu_metric.metric("CPU Usage", f"{stats['cpu']}%")
-                ram_metric.metric("RAM Usage", f"{stats['ram']}%")
-                disk_metric.metric("Disk Usage", f"{stats['disk']}%")
-                net_metric.write(f"🌐 Net: {stats['net_recv']:.1f}MB ↓ / {stats['net_sent']:.1f}MB ↑")
-                fps_metric.metric("Processing Speed", f"{fps:.2f} FPS")
-
-            cap.release()
-
-        except Exception as e:
-            st.error(f"Stream Error: {e}")
-    else:
-        frame_placeholder.info("Enter a URL and check 'Start Detection' to begin.")
-
-if __name__ == "__main__":
-    main()
+                ret,
