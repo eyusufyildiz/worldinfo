@@ -29,7 +29,7 @@ def get_stream_url(youtube_url, resolution):
         result = subprocess.run(
             [
                 "yt-dlp", 
-                "-f", f"bestvideo[height<={res_limit}]+bestaudio/best",
+                "-f", f"best[height<={res_limit}][ext=mp4]/best[ext=mp4]/best", # Better compatibility
                 "-g", youtube_url,
             ],
             capture_output=True,
