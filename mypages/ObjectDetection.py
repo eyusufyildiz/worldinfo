@@ -84,4 +84,42 @@ def main():
             prev_time = 0
             
             while cap.isOpened() and run_btn:
-                ret,
+                ret, frame = cap.read()
+                
+                if not ret:
+                    # Retry logic: YouTube streams often "hiccup"
+                    st.write("Retrying stream connection...")
+                    time.sleep(1)
+                    cap = cv2.VideoCapture(stream_url)
+                    continue
+
+                # FPS Calculation
+                curr_time = time.time()
+                fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
+                prev_time = curr_time
+
+                # YOLO Inference
+                results = model(frame, conf=conf_threshold, verbose=False)
+                annotated_frame = results[0].plot() 
+                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                
+                # Display
+                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
+
+                # Update Stats
+                stats = get_system_stats()
+                cpu_metric.metric("CPU Usage", f"{stats['cpu']}%")
+                ram_metric.metric("RAM Usage", f"{stats['ram']}%")
+                disk_metric.metric("Disk Usage", f"{stats['disk']}%")
+                net_metric.write(f"🌐 Net: {stats['net_recv']:.1f}MB ↓ / {stats['net_sent']:.1f}MB ↑")
+                fps_metric.metric("Processing Speed", f"{fps:.2f} FPS")
+
+            cap.release()
+
+        except Exception as e:
+            st.error(f"Stream Error: {e}")
+    else:
+        frame_placeholder.info("Enter a URL and check 'Start Detection' to begin.")
+
+if __name__ == "__main__":
+    main()
