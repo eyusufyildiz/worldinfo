@@ -56,7 +56,7 @@ def main():
     # Sidebar / User Inputs
     # ----------------------------
     youtube_url = st.text_input(
-        "YouTube URL", "https://www.youtube.com/watch?v=ztmY_cCtUl0"
+        "YouTube URL", "https://www.youtube.com/watch?v=BhBcICoRY6Q"
     )
     
     col1, col2 = st.columns(2)
