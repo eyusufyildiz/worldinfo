@@ -1,131 +1,115 @@
 import streamlit as st
 import cv2
-import subprocess
+import yt_dlp
 from ultralytics import YOLO
-from PIL import Image
-import torch
+import numpy as np
+import psutil
 import time
 
-# ----------------------------
-# Load YOLO model
-# ----------------------------
 @st.cache_resource
-def load_model():
-    model = YOLO("yolov8n.pt")  # lightweight & fast
-    if torch.cuda.is_available():
-        model.to("cuda")
-        model.fuse()
-    return model
+def load_yolo_model():
+    # Downloads 'yolov8n.pt' automatically on first run
+    return YOLO("yolov8n.pt") 
 
-# ----------------------------
-# Get YouTube stream URL
-# ----------------------------
-def get_stream_url(youtube_url, resolution):
-    """Return direct stream URL using yt-dlp without printing logs."""
-    try:
-        # Remove 'p' from resolution (e.g., '720p' -> '720')
-        res_limit = resolution.replace('p', '')
-        
-        result = subprocess.run(
-            [
-                "yt-dlp", 
-                "-f", f"bestvideo[height<={res_limit}]+bestaudio/best",
-                "-g", youtube_url,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        # yt-dlp -g can return two lines (video and audio), we take the first (video)
-        return result.stdout.strip().split('\n')[0]
-    except subprocess.CalledProcessError:
-        st.error(
-            "Failed to get stream URL. Make sure yt-dlp and ffmpeg are installed "
-            "and the video is accessible."
-        )
-        return None
-        
+def get_system_stats():
+    """Function to fetch current system resource usage."""
+    stats = {
+        "cpu": psutil.cpu_percent(interval=None),
+        "ram": psutil.virtual_memory().percent,
+        "disk": psutil.disk_usage('/').percent,
+        "net_sent": psutil.net_io_counters().bytes_sent / (1024 * 1024), # MB
+        "net_recv": psutil.net_io_counters().bytes_recv / (1024 * 1024), # MB
+    }
+    return stats
+
 def main():
-    # ----------------------------
-    # Streamlit page setup
-    # ----------------------------
-    st.set_page_config(layout="wide")
-    st.title("📺 YouTube Object Detection (Streamlit Cloud)")
+    st.set_page_config(page_title="YT Object Detector", layout="wide")
+    st.title("🎯 YouTube Object Detection")
 
-    # ----------------------------
-    # Sidebar / User Inputs
-    # ----------------------------
-    youtube_url = st.text_input(
-        "YouTube URL", "https://www.youtube.com/watch?v=ztmY_cCtUl0"
-    )
+    # Sidebar for System Metrics
+    st.sidebar.title("💻 System Monitor")
+    cpu_metric = st.sidebar.empty()
+    ram_metric = st.sidebar.empty()
+    disk_metric = st.sidebar.empty()
+    net_metric = st.sidebar.empty()
+    fps_metric = st.sidebar.empty()
+
+    # 1. Video URL Input
+    url = st.text_input("YouTube URL:", "https://www.youtube.com/watch?v=smoU272Dv14")
     
-    col1, col2 = st.columns(2)
+    # Placeholder for the video stream
+    frame_placeholder = st.empty()
+
+    # 2. Controls AFTER the video area
+    st.markdown("---")
+    st.subheader("Settings & Controls")
+    
+    col1, col2, col3 = st.columns(3)
+    
     with col1:
-        resolution = st.selectbox(
-            "Select video resolution",
-            ["144p", "240p", "360p", "480p", "720p", "1080p"],
-            index=4,
+        res_choice = st.selectbox(
+            "Stream Resolution", 
+            ["360p", "480p", "720p"], 
+            index=0,
+            help="Lower resolution is faster for Cloud CPUs"
         )
+        res_map = {"360p": "best[height<=360]", "480p": "best[height<=480]", "720p": "best[height<=720]"}
+
     with col2:
-        confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
-    
-    start = st.button("▶ Start Detection")
-    stop = st.button("🛑 Stop")
+        conf_threshold = st.slider("Detection Confidence", 0.0, 1.0, 0.4, 0.05)
 
-    model = load_model()
+    with col3:
+        run_btn = st.checkbox("Start Detection", value=False)
 
-    # ----------------------------
-    # Run object detection
-    # ----------------------------
-    if start and youtube_url:
-        stream_url = get_stream_url(youtube_url, resolution)
-        
-        if stream_url:
+    # 3. Execution Logic
+    if run_btn and url:
+        try:
+            ydl_opts = {'format': res_map[res_choice], 'quiet': True}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                stream_url = info['url']
+
             cap = cv2.VideoCapture(stream_url)
+            model = load_yolo_model()
+
+            # Variables for FPS calculation
+            prev_time = 0
             
-            if not cap.isOpened():
-                st.error("Failed to open video stream. Check the URL or resolution.")
-            else:
-                st.success("Stream opened! Running object detection...")
+            while cap.isOpened() and run_btn:
+                ret, frame = cap.read()
+                if not ret:
+                    st.warning("Stream ended or resolution not available.")
+                    break
 
-                frame_placeholder = st.empty()
-                frame_skip = 2
-                frame_count = 0
+                # FPS Calculation
+                curr_time = time.time()
+                fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
+                prev_time = curr_time
 
-                while cap.isOpened() and not stop:
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
+                # Run YOLO Inference
+                results = model(frame, conf=conf_threshold, verbose=False)
+                
+                # Annotate and Convert for Streamlit
+                annotated_frame = results[0].plot() 
+                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                
+                # Update Video Stream
+                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
 
-                    frame_count += 1
-                    if frame_count % frame_skip != 0:
-                        continue
+                # Update System Stats in Sidebar
+                stats = get_system_stats()
+                cpu_metric.metric("CPU Usage", f"{stats['cpu']}%")
+                ram_metric.metric("RAM Usage", f"{stats['ram']}%")
+                disk_metric.metric("Disk Usage", f"{stats['disk']}%")
+                net_metric.write(f"🌐 Net: {stats['net_recv']:.1f}MB ↓ / {stats['net_sent']:.1f}MB ↑")
+                fps_metric.metric("Processing Speed", f"{fps:.2f} FPS")
 
-                    # Resize frame for speed
-                    frame = cv2.resize(frame, (1280, 720))
+            cap.release()
 
-                    # YOLO detection
-                    try:
-                        results = model(frame, conf=confidence, verbose=False)
-                        annotated = results[0].plot()
-                    except Exception as e:
-                        continue  # skip frame silently
-
-                    # Convert BGR → RGB for Streamlit display
-                    annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-
-                    # Display frame in Streamlit
-                    frame_placeholder.image(
-                        annotated,
-                        channels="RGB",
-                        use_container_width=True
-                    )
-
-                    # Small sleep to prevent CPU hogging
-                    time.sleep(0.01)
-
-                cap.release()
-                st.info("✅ Detection stopped.")
+        except Exception as e:
+            st.error(f"Error: {e}")
+    else:
+        frame_placeholder.info("Enter a URL and check 'Start Detection' to begin.")
 
 if __name__ == "__main__":
     main()
