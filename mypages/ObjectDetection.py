@@ -23,10 +23,13 @@ def load_model():
 def get_stream_url(youtube_url, resolution):
     """Return direct stream URL using yt-dlp without printing logs."""
     try:
+        # Remove 'p' from resolution (e.g., '720p' -> '720')
+        res_limit = resolution.replace('p', '')
+        
         result = subprocess.run(
             [
                 "yt-dlp", 
-                "-f", f"bestvideo[height<={resolution.replace('p','') punch}]+bestaudio/best",
+                "-f", f"bestvideo[height<={res_limit}]+bestaudio/best",
                 "-g", youtube_url,
             ],
             capture_output=True,
@@ -41,7 +44,7 @@ def get_stream_url(youtube_url, resolution):
             "and the video is accessible."
         )
         return None
-
+        
 def main():
     # ----------------------------
     # Streamlit page setup
