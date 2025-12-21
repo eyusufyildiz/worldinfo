@@ -1,59 +1,46 @@
 import streamlit as st
 import cv2
+import yt_dlp
+import os
 from ultralytics import YOLO
-from cap_from_youtube import cap_from_youtube
 
 def main():
-    st.set_page_config(page_title="YouTube Object Detector", layout="wide")
-    st.title("🚀 YouTube Video Object Detection")
-
-
-    # Model Selection
-    model_type = st.selectbox("Select YOLO Model", ["yolo11n.pt", "yolo11s.pt", "yolo11m.pt"])
+    st.title("YouTube Object Detection (SABR Fix)")
+    url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=smoU272Dv14")
     
-    # Confidence Threshold
-    conf_threshold = st.slider("Detection Confidence", 0.0, 1.0, 0.45, 0.05)
-    
-    # Resolution Options
-    resolution = st.selectbox("Stream Resolution", ["360p", "480p", "720p", "1080p"], index=0)
-    
-    # YouTube URL Input
-    url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=MNn9qKG2UFI")
+    if st.button("Start Processing"):
+        # 1. Download settings (Low res for speed)
+        ydl_opts = {
+            'format': 'best[ext=mp4]/best',
+            'outtmpl': 'temp_video.mp4',
+            'noplaylist': True,
+        }
 
-    # --- Logic ---
-    if st.button("Start Detection"):
-        try:
-            # Load Model
-            model = YOLO(model_type)
+        with st.spinner("Downloading/Buffering video..."):
+            if os.path.exists("temp_video.mp4"):
+                os.remove("temp_video.mp4")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+
+        # 2. Process with OpenCV
+        cap = cv2.VideoCapture("temp_video.mp4")
+        st_frame = st.empty()
+        model = YOLO("yolo11n.pt") # Smallest model for speed
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
             
-            # Initialize YouTube Stream
-            cap = cap_from_youtube(url, resolution)
+            # Inference
+            results = model(frame, conf=0.4)
+            annotated_frame = results[0].plot()
             
-            # Create a placeholder for the video frame
-            st_frame = st.empty()
-
-            while cap.isOpened():
-                success, frame = cap.read()
-                if not success:
-                    st.warning("Finished processing or unable to fetch frame.")
-                    break
-
-                # Run Inference
-                results = model.predict(frame, conf=conf_threshold, verbose=False)
-
-                # Plot results on frame
-                annotated_frame = results[0].plot()
-
-                # Convert BGR to RGB for Streamlit
-                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-
-                # Display frame
-                st_frame.image(annotated_frame, channels="RGB", use_container_width=True)
-
-            cap.release()
-
-        except Exception as e:
-            st.error(f"Error: {e}")
+            # Display
+            st_frame.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
+        
+        cap.release()
+        os.remove("temp_video.mp4")
 
 if __name__ == "__main__":
     main()
