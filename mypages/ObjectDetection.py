@@ -2,69 +2,74 @@ import streamlit as st
 import cv2
 from ultralytics import YOLO
 import yt_dlp
+import numpy as np
 
-def get_youtube_stream_url(video_url):
-    """
-    Extracts the best streamable URL. 
-    Using 'ext:mp4' helps avoid complex formats that require JS runtimes.
-    """
+def get_stream_info(url):
+    """Extracts the best mp4 stream URL using yt-dlp with browser headers."""
     ydl_opts = {
-        # 'best' is more reliable than specific resolution strings when JS is missing
-        'format': 'best[ext=mp4]', 
+        'format': 'best[ext=mp4]/best', # Prioritize MP4
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
-    
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(video_url, download=False)
-        return info['url']
+        try:
+            info = ydl.extract_info(url, download=False)
+            return info['url']
+        except Exception as e:
+            st.error(f"YouTube Error: {e}")
+            return None
 
 def main():
-    st.set_page_config(page_title="YOLOv8 AI Streamer", layout="wide")
-    st.title("🛡️ YOLOv8 Real-Time Detection")
+    st.set_page_config(page_title="YOLO Container Streamer", layout="wide")
+    st.title("🎥 AI Object Detection Stream")
 
-    # --- Sidebar Configuration ---
-    st.sidebar.header("Control Panel")
-    model_name = st.sidebar.selectbox("Model", ["yolov8n.pt", "yolov8s.pt"])
+    # --- Sidebar ---
+    st.sidebar.header("Configuration")
+    model_choice = st.sidebar.selectbox("YOLO Model", ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt"])
     video_url = st.sidebar.text_input("YouTube URL", "https://www.youtube.com/watch?v=MNn9q6cHTpw")
-    conf_level = st.sidebar.slider("Confidence", 0.0, 1.0, 0.3)
+    conf_thresh = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.30)
     
-    # Session state to toggle detection
-    if 'detecting' not in st.session_state:
-        st.session_state.detecting = False
+    # Start/Stop Logic
+    if 'is_running' not in st.session_state:
+        st.session_state.is_running = False
 
     col1, col2 = st.sidebar.columns(2)
-    if col1.button("▶️ Start"):
-        st.session_state.detecting = True
-    if col2.button("⏹️ Stop"):
-        st.session_state.detecting = False
+    if col1.button("🚀 Start"):
+        st.session_state.is_running = True
+    if col2.button("🛑 Stop"):
+        st.session_state.is_running = False
 
-    # --- Detection Engine ---
-    if st.session_state.detecting:
-        model = YOLO(model_name)
-        st_frame = st.empty()
+    # --- Video Processing ---
+    if st.session_state.is_running:
+        model = YOLO(model_choice)
+        stream_url = get_stream_info(video_url)
         
-        try:
-            stream_url = get_youtube_stream_url(video_url)
+        if stream_url:
             cap = cv2.VideoCapture(stream_url)
+            st_frame = st.empty()
 
-            while cap.isOpened() and st.session_state.detecting:
+            while cap.isOpened() and st.session_state.is_running:
                 ret, frame = cap.read()
                 if not ret:
+                    st.warning("Attempting to reconnect or stream ended...")
                     break
-
-                # Inference
-                results = model.predict(frame, conf=conf_level, verbose=False)
                 
-                # Plot and Show
-                annotated = results[0].plot()
-                st_frame.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), channels="RGB")
+                # Inference
+                results = model.predict(frame, conf=conf_thresh, verbose=False)
+                
+                # Plot results
+                annotated_frame = results[0].plot()
+                
+                # Convert BGR (OpenCV) to RGB (Streamlit)
+                rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                
+                st_frame.image(rgb_frame, channels="RGB", use_container_width=True)
 
             cap.release()
-        except Exception as e:
-            st.error(f"Stream Error: {e}")
-            st.session_state.detecting = False
+        else:
+            st.error("Failed to retrieve stream. The video might be restricted or the URL is invalid.")
 
 if __name__ == "__main__":
     main()
