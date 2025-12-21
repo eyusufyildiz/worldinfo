@@ -1,32 +1,54 @@
 import streamlit as st
 import yt_dlp
 
-st.set_page_config(page_title="YouTube Streamer", page_icon="📺")
+def fetch_video_info(url):
+    """
+    Helper function to extract video metadata using yt-dlp.
+    """
+    ydl_opts = {'format': 'best', 'quiet': True}
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        return ydl.extract_info(url, download=False)
 
-st.title("📺 YouTube Video Loader")
-st.write("Enter a YouTube URL below to play it directly in the app.")
+def main():
+    # Page Configuration
+    st.set_page_config(page_title="Streamlit YT Player", page_icon="🎥")
 
-# Input field for the URL
-url = st.text_input("Paste YouTube URL here:", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    # UI Header
+    st.title("🎥 YouTube Cloud Player")
+    st.markdown("---")
 
-if url:
-    try:
-        # Options for yt_dlp to get the direct video URL
-        ydl_opts = {'format': 'best'}
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            video_title = info.get('title', 'Video')
-            
-            st.subheader(f"Now Playing: {video_title}")
-            
-            # Streamlit's native video player handles YouTube URLs directly
-            # but using the processed URL ensures better compatibility
-            st.video(url)
-            
-            st.success("Video loaded successfully!")
-            
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+    # Sidebar for settings/info
+    st.sidebar.header("About")
+    st.sidebar.info("This app runs in a Streamlit Cloud container and uses `yt-dlp` to process YouTube content.")
 
-st.info("Note: Some videos may be restricted by YouTube for third-party playback.")
+    # User Input
+    url = st.text_input("Enter YouTube URL:", placeholder="https://www.youtube.com/watch?v=...")
+
+    if url:
+        with st.spinner("Fetching video details..."):
+            try:
+                info = fetch_video_info(url)
+                
+                # Display Video Title and Thumbnail
+                st.subheader(info.get('title', 'Video Preview'))
+                
+                # Streamlit's built-in video widget
+                st.video(url)
+                
+                # Optional: Show Metadata in an expander
+                with st.expander("View Video Metadata"):
+                    st.json({
+                        "Channel": info.get("uploader"),
+                        "Views": info.get("view_count"),
+                        "Duration": f"{info.get('duration')} seconds",
+                        "Upload Date": info.get("upload_date")
+                    })
+
+            except Exception as e:
+                st.error(f"Error: Could not retrieve video. {e}")
+    else:
+        st.write("Please enter a valid link to begin.")
+
+# The entry point for the Streamlit container
+if __name__ == "__main__":
+    main()
