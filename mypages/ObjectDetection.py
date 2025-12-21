@@ -14,7 +14,7 @@ def main():
     st.title("🎯 YouTube Object Detection")
 
     # 1. Video URL Input
-    url = st.text_input("YouTube URL:", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    url = st.text_input("YouTube URL:", "https://www.youtube.com/watch?v=gCNeDWCI0vo")
     
     # Placeholder for the video stream
     frame_placeholder = st.empty()
