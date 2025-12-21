@@ -2,74 +2,75 @@ import streamlit as st
 import cv2
 from ultralytics import YOLO
 import yt_dlp
-import numpy as np
+import os
 
-def get_stream_info(url):
-    """Extracts the best mp4 stream URL using yt-dlp with browser headers."""
+def get_stable_stream(url):
+    """
+    Forces yt-dlp to find a non-segmented, single-link MP4.
+    This avoids the HLS/m3u8 errors in OpenCV.
+    """
     ydl_opts = {
-        'format': 'best[ext=mp4]/best', # Prioritize MP4
+        # '18' is usually the code for 360p MP4 - highly compatible
+        # '22' is 720p MP4
+        'format': 'best[ext=mp4][protocol=https]', 
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
+    
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(url, download=False)
-            return info['url']
+            # Ensure we aren't getting a manifest/playlist URL
+            return info.get('url')
         except Exception as e:
-            st.error(f"YouTube Error: {e}")
+            st.error(f"yt-dlp error: {e}")
             return None
 
 def main():
-    st.set_page_config(page_title="YOLO Container Streamer", layout="wide")
-    st.title("🎥 AI Object Detection Stream")
-
-    # --- Sidebar ---
-    st.sidebar.header("Configuration")
-    model_choice = st.sidebar.selectbox("YOLO Model", ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt"])
-    video_url = st.sidebar.text_input("YouTube URL", "https://www.youtube.com/watch?v=MNn9q6cHTpw")
-    conf_thresh = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.30)
+    st.set_page_config(page_title="Stable YOLO Streamer", layout="wide")
     
-    # Start/Stop Logic
-    if 'is_running' not in st.session_state:
-        st.session_state.is_running = False
+    st.sidebar.title("Settings")
+    video_url = st.sidebar.text_input("YouTube URL", "https://www.youtube.com/watch?v=MNn9q6cHTpw")
+    model_name = st.sidebar.selectbox("Model", ["yolov8n.pt", "yolov8s.pt"])
+    conf_thresh = st.sidebar.slider("Confidence", 0.0, 1.0, 0.3)
+    
+    if 'run_state' not in st.session_state:
+        st.session_state.run_state = False
 
     col1, col2 = st.sidebar.columns(2)
-    if col1.button("🚀 Start"):
-        st.session_state.is_running = True
-    if col2.button("🛑 Stop"):
-        st.session_state.is_running = False
+    if col1.button("Start"): st.session_state.run_state = True
+    if col2.button("Stop"): st.session_state.run_state = False
 
-    # --- Video Processing ---
-    if st.session_state.is_running:
-        model = YOLO(model_choice)
-        stream_url = get_stream_info(video_url)
+    if st.session_state.run_state:
+        model = YOLO(model_name)
+        stream_url = get_stable_stream(video_url)
         
         if stream_url:
-            cap = cv2.VideoCapture(stream_url)
+            # We add cv2.CAP_FFMPEG to force the use of the FFMPEG backend
+            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
+            
+            # Set a timeout/buffer limit to prevent the app from freezing
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 2) 
+            
             st_frame = st.empty()
 
-            while cap.isOpened() and st.session_state.is_running:
+            while cap.isOpened() and st.session_state.run_state:
                 ret, frame = cap.read()
                 if not ret:
-                    st.warning("Attempting to reconnect or stream ended...")
+                    st.warning("Lost stream connection. Retrying...")
                     break
                 
-                # Inference
+                # Perform Detection
                 results = model.predict(frame, conf=conf_thresh, verbose=False)
+                annotated_img = results[0].plot()
                 
-                # Plot results
-                annotated_frame = results[0].plot()
+                # Display
+                st_frame.image(cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB), channels="RGB")
                 
-                # Convert BGR (OpenCV) to RGB (Streamlit)
-                rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                
-                st_frame.image(rgb_frame, channels="RGB", use_container_width=True)
-
             cap.release()
         else:
-            st.error("Failed to retrieve stream. The video might be restricted or the URL is invalid.")
+            st.error("Could not extract a compatible MP4 stream from this URL.")
 
 if __name__ == "__main__":
     main()
