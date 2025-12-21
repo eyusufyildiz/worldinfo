@@ -1,7 +1,6 @@
 import streamlit as st
 import cv2
 import yt_dlp
-import streamlink
 from ultralytics import YOLO
 import numpy as np
 import psutil
