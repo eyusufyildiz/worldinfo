@@ -7,27 +7,6 @@ import torch
 import time
 
 # ----------------------------
-# Streamlit page setup
-# ----------------------------
-st.set_page_config(layout="wide")
-st.title("📺 YouTube Object Detection (Streamlit Cloud)")
-
-# ----------------------------
-# User Inputs
-# ----------------------------
-youtube_url = st.text_input(
-    "YouTube URL", "https://www.youtube.com/watch?v=ztmY_cCtUl0"
-)
-resolution = st.selectbox(
-    "Select video resolution",
-    ["144p", "240p", "360p", "480p", "720p", "1080p"],
-    index=4,
-)
-confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
-start = st.button("▶ Start Detection")
-
-
-# ----------------------------
 # Load YOLO model
 # ----------------------------
 @st.cache_resource
@@ -38,10 +17,6 @@ def load_model():
         model.fuse()
     return model
 
-
-model = load_model()
-
-
 # ----------------------------
 # Get YouTube stream URL
 # ----------------------------
@@ -49,14 +24,17 @@ def get_stream_url(youtube_url, resolution):
     """Return direct stream URL using yt-dlp without printing logs."""
     try:
         result = subprocess.run(
-            [ "yt-dlp", "-f", f"bestvideo[height<={resolution.replace('p','')}]+bestaudio/best",
+            [
+                "yt-dlp", 
+                "-f", f"bestvideo[height<={resolution.replace('p','') punch}]+bestaudio/best",
                 "-g", youtube_url,
             ],
             capture_output=True,
             text=True,
             check=True,
         )
-        return result.stdout.strip()
+        # yt-dlp -g can return two lines (video and audio), we take the first (video)
+        return result.stdout.strip().split('\n')[0]
     except subprocess.CalledProcessError:
         st.error(
             "Failed to get stream URL. Make sure yt-dlp and ffmpeg are installed "
@@ -64,64 +42,87 @@ def get_stream_url(youtube_url, resolution):
         )
         return None
 
+def main():
+    # ----------------------------
+    # Streamlit page setup
+    # ----------------------------
+    st.set_page_config(layout="wide")
+    st.title("📺 YouTube Object Detection (Streamlit Cloud)")
 
-# ----------------------------
-# Run object detection
-# ----------------------------
-if start and youtube_url:
-    stream_url = get_stream_url(youtube_url, resolution)
-    if stream_url:
-        cap = cv2.VideoCapture(stream_url)
-        if not cap.isOpened():
-            st.error("Failed to open video stream. Check the URL or resolution.")
-        else:
-            st.success("Stream opened! Running object detection...")
+    # ----------------------------
+    # Sidebar / User Inputs
+    # ----------------------------
+    youtube_url = st.text_input(
+        "YouTube URL", "https://www.youtube.com/watch?v=ztmY_cCtUl0"
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        resolution = st.selectbox(
+            "Select video resolution",
+            ["144p", "240p", "360p", "480p", "720p", "1080p"],
+            index=4,
+        )
+    with col2:
+        confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
+    
+    start = st.button("▶ Start Detection")
+    stop = st.button("🛑 Stop")
 
-            frame_placeholder = st.empty()
-            frame_skip = 2
-            frame_count = 0
+    model = load_model()
 
-            # Pause / Resume button
-            paused = False
-            pause_button = st.button("⏸ Pause / Resume")
+    # ----------------------------
+    # Run object detection
+    # ----------------------------
+    if start and youtube_url:
+        stream_url = get_stream_url(youtube_url, resolution)
+        
+        if stream_url:
+            cap = cv2.VideoCapture(stream_url)
+            
+            if not cap.isOpened():
+                st.error("Failed to open video stream. Check the URL or resolution.")
+            else:
+                st.success("Stream opened! Running object detection...")
 
-            while cap.isOpened():
-                if pause_button:
-                    paused = not paused
+                frame_placeholder = st.empty()
+                frame_skip = 2
+                frame_count = 0
 
-                if paused:
-                    time.sleep(0.1)
-                    continue
+                while cap.isOpened() and not stop:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                    frame_count += 1
+                    if frame_count % frame_skip != 0:
+                        continue
 
-                frame_count += 1
-                if frame_count % frame_skip != 0:
-                    continue
+                    # Resize frame for speed
+                    frame = cv2.resize(frame, (1280, 720))
 
-                # Resize frame for speed
-                frame = cv2.resize(frame, (1280, 768))
+                    # YOLO detection
+                    try:
+                        results = model(frame, conf=confidence, verbose=False)
+                        annotated = results[0].plot()
+                    except Exception as e:
+                        continue  # skip frame silently
 
-                # YOLO detection
-                try:
-                    results = model(frame, conf=confidence)
-                    annotated = results[0].plot()
-                except Exception:
-                    continue  # skip frame silently
+                    # Convert BGR → RGB for Streamlit display
+                    annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
 
-                # Convert BGR → RGB for Streamlit display
-                annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+                    # Display frame in Streamlit
+                    frame_placeholder.image(
+                        annotated,
+                        channels="RGB",
+                        use_container_width=True
+                    )
 
-                # Display frame in Streamlit
-                frame_placeholder.image(
-                    annotated,
-                    channels="RGB",
-                    width=800,  # use width instead of deprecated use_column_width
-                )
+                    # Small sleep to prevent CPU hogging
+                    time.sleep(0.01)
 
-                time.sleep(0.03)  # smooth playback
+                cap.release()
+                st.info("✅ Detection stopped.")
 
-            cap.release()
-            st.success("✅ Detection completed.")
+if __name__ == "__main__":
+    main()
