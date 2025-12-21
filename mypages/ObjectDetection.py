@@ -1,95 +1,128 @@
 import streamlit as st
 import cv2
-import yt_dlp
+import subprocess
 from ultralytics import YOLO
-import numpy as np
+from PIL import Image
+import torch
+import time
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="YT Object Detector", layout="wide")
-
+# ----------------------------
+# Load YOLO model
+# ----------------------------
 @st.cache_resource
-def load_yolo_model():
-    # Downloads 'yolov8n.pt' (Nano) which is best for CPU real-time performance
-    return YOLO("yolov8n.pt") 
+def load_model():
+    model = YOLO("yolov8n.pt")  # lightweight & fast
+    if torch.cuda.is_available():
+        model.to("cuda")
+        model.fuse()
+    return model
+
+# ----------------------------
+# Get YouTube stream URL
+# ----------------------------
+def get_stream_url(youtube_url, resolution):
+    """Return direct stream URL using yt-dlp without printing logs."""
+    try:
+        result = subprocess.run(
+            [
+                "yt-dlp", 
+                "-f", f"bestvideo[height<={resolution.replace('p','') punch}]+bestaudio/best",
+                "-g", youtube_url,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # yt-dlp -g can return two lines (video and audio), we take the first (video)
+        return result.stdout.strip().split('\n')[0]
+    except subprocess.CalledProcessError:
+        st.error(
+            "Failed to get stream URL. Make sure yt-dlp and ffmpeg are installed "
+            "and the video is accessible."
+        )
+        return None
 
 def main():
-    st.title("🎯 YouTube Real-Time Object Detection")
-    st.info("Ensure you have 'ffmpeg' installed on your system for this to run.")
+    # ----------------------------
+    # Streamlit page setup
+    # ----------------------------
+    st.set_page_config(layout="wide")
+    st.title("📺 YouTube Object Detection (Streamlit Cloud)")
 
-    # 1. Sidebar - Configuration
-    st.sidebar.header("Stream Settings")
-    url = st.sidebar.text_input("YouTube URL:", "https://www.youtube.com/watch?v=smoU272Dv14")
-    
-    res_choice = st.sidebar.selectbox(
-        "Resolution", 
-        ["360p", "480p", "720p"], 
-        index=0,
-        help="Higher resolutions will cause significant lag on most CPUs."
+    # ----------------------------
+    # Sidebar / User Inputs
+    # ----------------------------
+    youtube_url = st.text_input(
+        "YouTube URL", "https://www.youtube.com/watch?v=ztmY_cCtUl0"
     )
     
-    conf_threshold = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.35, 0.05)
+    col1, col2 = st.columns(2)
+    with col1:
+        resolution = st.selectbox(
+            "Select video resolution",
+            ["144p", "240p", "360p", "480p", "720p", "1080p"],
+            index=4,
+        )
+    with col2:
+        confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
     
-    # 2. Main Area - Setup
-    frame_placeholder = st.empty()
-    run_btn = st.checkbox("🚀 Start Processing", value=False)
+    start = st.button("▶ Start Detection")
+    stop = st.button("🛑 Stop")
 
-    # Resolution mapping for yt-dlp
-    res_map = {
-        "360p": "best[height<=360]", 
-        "480p": "best[height<=480]", 
-        "720p": "best[height<=720]"
-    }
+    model = load_model()
 
-    if run_btn and url:
-        try:
-            # Step A: Extract fresh stream URL
-            ydl_opts = {
-                'format': res_map[res_choice],
-                'quiet': True,
-                'no_warnings': True,
-            }
+    # ----------------------------
+    # Run object detection
+    # ----------------------------
+    if start and youtube_url:
+        stream_url = get_stream_url(youtube_url, resolution)
+        
+        if stream_url:
+            cap = cv2.VideoCapture(stream_url)
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                stream_url = info['url']
-
-            # Step B: Initialize OpenCV with FFMPEG backend
-            # We use cv2.CAP_FFMPEG to ensure it handles the YouTube network stream
-            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-            
-            # Set buffer size to small to reduce lag
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
-
             if not cap.isOpened():
-                st.error("Error: Could not open video stream. This usually happens if FFmpeg is missing or the URL is blocked.")
-                return
+                st.error("Failed to open video stream. Check the URL or resolution.")
+            else:
+                st.success("Stream opened! Running object detection...")
 
-            model = load_yolo_model()
+                frame_placeholder = st.empty()
+                frame_skip = 2
+                frame_count = 0
 
-            # Step C: The Processing Loop
-            while run_btn:
-                ret, frame = cap.read()
-                
-                if not ret:
-                    st.warning("Stream ended or failed to retrieve frame.")
-                    break
+                while cap.isOpened() and not stop:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                # Inference
-                results = model(frame, conf=conf_threshold, verbose=False)
-                
-                # Plot results and convert BGR (OpenCV) to RGB (Streamlit)
-                annotated_frame = results[0].plot() 
-                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                
-                # Display in Streamlit
-                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
+                    frame_count += 1
+                    if frame_count % frame_skip != 0:
+                        continue
 
-            cap.release()
+                    # Resize frame for speed
+                    frame = cv2.resize(frame, (1280, 720))
 
-        except Exception as e:
-            st.error(f"Critical Error: {e}")
-    else:
-        frame_placeholder.info("Click 'Start Processing' to begin the stream.")
+                    # YOLO detection
+                    try:
+                        results = model(frame, conf=confidence, verbose=False)
+                        annotated = results[0].plot()
+                    except Exception as e:
+                        continue  # skip frame silently
+
+                    # Convert BGR → RGB for Streamlit display
+                    annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+
+                    # Display frame in Streamlit
+                    frame_placeholder.image(
+                        annotated,
+                        channels="RGB",
+                        use_container_width=True
+                    )
+
+                    # Small sleep to prevent CPU hogging
+                    time.sleep(0.01)
+
+                cap.release()
+                st.info("✅ Detection stopped.")
 
 if __name__ == "__main__":
     main()
