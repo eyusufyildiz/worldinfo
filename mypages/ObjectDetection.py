@@ -25,20 +25,18 @@ def main():
     st.set_page_config(page_title="YOLOv8 Streamer", layout="wide")
     st.title("🎯 YOLOv8 Container Object Detection")
 
-    # --- Sidebar ---
-    st.sidebar.header("Controls")
-    model_choice = st.sidebar.selectbox("YOLO Model", ["yolov8n.pt", "yolov8s.pt"])
-    video_url = st.sidebar.text_input("YouTube URL", "https://www.youtube.com/watch?v=MNn9q6cHTpw")
-    conf_thresh = st.sidebar.slider("Confidence", 0.0, 1.0, 0.25)
+    model_choice = st.selectbox("YOLO Model", ["yolov8n.pt", "yolov8s.pt"])
+    video_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=smoU272Dv14")
+    conf_thresh = st.slider("Confidence", 0.0, 1.0, 0.25)
     
     # Updated width control
-    use_stretch = st.sidebar.checkbox("Stretch to Container Width", value=True)
+    use_stretch = st.checkbox("Stretch to Container Width", value=True)
     img_width = "stretch" if use_stretch else 720
 
     if 'running' not in st.session_state:
         st.session_state.running = False
 
-    col1, col2 = st.sidebar.columns(2)
+    col1, col2 = st.columns(2)
     if col1.button("Start"):
         st.session_state.running = True
     if col2.button("Stop"):
