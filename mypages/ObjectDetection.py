@@ -1,57 +1,62 @@
+
 import streamlit as st
 import cv2
 import yt_dlp
 from ultralytics import YOLO
+import numpy as np
 
+# This function cache prevents the model from reloading on every frame
 @st.cache_resource
 def load_yolo_model():
+    # Downloads 'yolov8n.pt' (nano version) automatically
     return YOLO("yolov8n.pt") 
 
 def main():
-    st.set_page_config(page_title="Fast YT Detector")
-    st.title("⚡ High-Speed Object Detection")
+    st.set_page_config(page_title="Cloud Object Detector", layout="wide")
+    st.title("🎯 YouTube Object Detection (YOLOv8)")
 
     url = st.text_input("YouTube URL:", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-    frame_placeholder = st.empty()
-
-    st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        res_choice = st.selectbox("Resolution", ["360p", "480p"], index=0)
+    
+    # UI Layout
+    col1, col2 = st.columns([3, 1])
     with col2:
-        # LOWER THIS for speed: skipping 5 frames means only processing 6fps instead of 30fps
-        frame_skip = st.slider("Frame Skip (Speedup)", 1, 10, 5) 
-    with col3:
-        run_btn = st.checkbox("Start")
+        conf_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.4)
+        run_btn = st.checkbox("Run Detection", value=False)
+
+    frame_placeholder = col1.empty()
 
     if run_btn and url:
         try:
-            ydl_opts = {'format': 'best[height<=360]', 'quiet': True}
+            # 1. Get the direct stream URL using yt-dlp
+            ydl_opts = {'format': 'best[ext=mp4]', 'quiet': True}
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                stream_url = ydl.extract_info(url, download=False)['url']
+                info = ydl.extract_info(url, download=False)
+                stream_url = info['url']
 
+            # 2. Open Video Stream
             cap = cv2.VideoCapture(stream_url)
             model = load_yolo_model()
-            
-            count = 0
+
             while cap.isOpened() and run_btn:
                 ret, frame = cap.read()
-                if not ret: break
+                if not ret:
+                    st.warning("End of stream or connection lost.")
+                    break
 
-                # --- SPEED OPTIMIZATION: FRAME SKIPPING ---
-                if count % frame_skip == 0:
-                    # Resize frame slightly to speed up YOLO even more
-                    # imgsz=320 is the "Nano" standard and very fast
-                    results = model(frame, conf=0.4, imgsz=320, verbose=False)
-                    annotated_frame = results[0].plot()
-                    
-                    # Convert and display
-                    annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                    frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
-                
-                count += 1
+                # 3. Run YOLO Detection
+                # stream=True is more memory efficient for containers
+                results = model(frame, conf=conf_threshold, verbose=False)
+
+                # 4. Draw results on the frame
+                annotated_frame = results[0].plot() 
+
+                # 5. Display in Streamlit
+                # Convert BGR (OpenCV) to RGB (Streamlit)
+                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
 
             cap.release()
+
         except Exception as e:
             st.error(f"Error: {e}")
 
