@@ -1,6 +1,7 @@
 import streamlit as st
 import cv2
 import yt_dlp
+import streamlink
 from ultralytics import YOLO
 import numpy as np
 import psutil
@@ -41,13 +42,9 @@ def main():
     col1, col2, col3 = st.columns(3)
     
     with col1:
+        # Streamlink uses simple strings for quality
         res_choice = st.selectbox("Stream Resolution", ["360p", "480p", "720p"], index=0)
-        # 18 is the itag for 360p MP4 (most compatible with OpenCV)
-        res_map = {
-            "360p": "18/best",
-            "480p": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]",
-            "720p": "22/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best"
-        }
+        res_map = {"360p": "360p", "480p": "480p", "720p": "720p"}
 
     with col2:
         conf_threshold = st.slider("Detection Confidence", 0.0, 1.0, 0.4, 0.05)
@@ -57,24 +54,22 @@ def main():
 
     if run_btn and url:
         try:
-            # yt-dlp setup with browser impersonation to bypass throttling
-            ydl_opts = {
-                'format': res_map[res_choice],
-                'quiet': True,
-                'no_warnings': True,
-                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
+            # STEP 1: Use Streamlink to get the actual stream
+            streams = streamlink.streams(url)
+            if not streams:
+                st.error("No streams found for this URL.")
+                return
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                stream_url = info.get('url', None)
+            # Select the best available quality matching our choice
+            stream_url = streams[res_map[res_choice]].url
 
-            if not stream_url:
-                st.error("Could not extract stream URL.")
+            # STEP 2: Open VideoCapture with the Streamlink URL
+            cap = cv2.VideoCapture(stream_url)
+            
+            if not cap.isOpened():
+                st.error("Failed to open stream. YouTube may be blocking the connection.")
                 return
 
-            # Initialize Capture
-            cap = cv2.VideoCapture(stream_url)
             model = load_yolo_model()
             prev_time = 0
             
@@ -82,7 +77,6 @@ def main():
                 ret, frame = cap.read()
                 
                 if not ret:
-                    # Small sleep to allow buffer to refill
                     time.sleep(0.1)
                     continue
 
@@ -96,7 +90,7 @@ def main():
                 annotated_frame = results[0].plot() 
                 annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                 
-                # UPDATED: Use width='stretch' instead of use_container_width
+                # Streamlit 2025 compliant width
                 frame_placeholder.image(annotated_frame, channels="RGB", width='stretch')
 
                 # Update Stats
