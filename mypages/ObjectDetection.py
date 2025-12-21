@@ -4,106 +4,92 @@ import yt_dlp
 from ultralytics import YOLO
 import numpy as np
 
-# Page Configuration
-st.set_page_config(page_title="YT Object Detector", layout="centered")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="YT Object Detector", layout="wide")
 
 @st.cache_resource
 def load_yolo_model():
-    # Downloads 'yolov8n.pt' automatically on first run
+    # Downloads 'yolov8n.pt' (Nano) which is best for CPU real-time performance
     return YOLO("yolov8n.pt") 
 
 def main():
-    st.title("🎯 YouTube Object Detection")
-    st.markdown("""
-    This app uses **YOLOv8** to detect objects in real-time from a YouTube stream.
-    *Note: If the stream doesn't start, try lowering the resolution.*
-    """)
+    st.title("🎯 YouTube Real-Time Object Detection")
+    st.info("Ensure you have 'ffmpeg' installed on your system for this to run.")
 
-    # 1. Video URL Input
-    url = st.text_input("YouTube URL:", "https://www.youtube.com/watch?v=smoU272Dv14")
+    # 1. Sidebar - Configuration
+    st.sidebar.header("Stream Settings")
+    url = st.sidebar.text_input("YouTube URL:", "https://www.youtube.com/watch?v=smoU272Dv14")
     
-    # Placeholder for the video stream
+    res_choice = st.sidebar.selectbox(
+        "Resolution", 
+        ["360p", "480p", "720p"], 
+        index=0,
+        help="Higher resolutions will cause significant lag on most CPUs."
+    )
+    
+    conf_threshold = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.35, 0.05)
+    
+    # 2. Main Area - Setup
     frame_placeholder = st.empty()
+    run_btn = st.checkbox("🚀 Start Processing", value=False)
 
-    # 2. Controls
-    st.markdown("---")
-    st.subheader("Settings & Controls")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        res_choice = st.selectbox(
-            "Stream Resolution", 
-            ["360p", "480p", "720p"], 
-            index=0,
-            help="Lower resolution is much faster for CPU processing."
-        )
-        # Map choice to yt-dlp format string
-        res_map = {
-            "360p": "best[height<=360]", 
-            "480p": "best[height<=480]", 
-            "720p": "best[height<=720]"
-        }
+    # Resolution mapping for yt-dlp
+    res_map = {
+        "360p": "best[height<=360]", 
+        "480p": "best[height<=480]", 
+        "720p": "best[height<=720]"
+    }
 
-    with col2:
-        conf_threshold = st.slider("Detection Confidence", 0.0, 1.0, 0.30, 0.05)
-
-    with col3:
-        # Using a button or checkbox to trigger the loop
-        run_btn = st.checkbox("Start Detection", value=False)
-
-    # 3. Execution Logic
     if run_btn and url:
         try:
-            # Setup yt-dlp to get the direct stream URL
+            # Step A: Extract fresh stream URL
             ydl_opts = {
                 'format': res_map[res_choice],
                 'quiet': True,
                 'no_warnings': True,
-                'nocheckcertificate': True
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 stream_url = info['url']
 
-            # CRITICAL FIX: Explicitly use CAP_FFMPEG to handle YouTube stream URLs
+            # Step B: Initialize OpenCV with FFMPEG backend
+            # We use cv2.CAP_FFMPEG to ensure it handles the YouTube network stream
             cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
             
+            # Set buffer size to small to reduce lag
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+
             if not cap.isOpened():
-                st.error("Failed to open video stream. YouTube might be blocking the request or FFmpeg is missing.")
+                st.error("Error: Could not open video stream. This usually happens if FFmpeg is missing or the URL is blocked.")
                 return
 
             model = load_yolo_model()
 
-            # Loop for processing frames
+            # Step C: The Processing Loop
             while run_btn:
-                # To keep the stream "live" and avoid lag, we read two frames 
-                # but only process the last one. This clears the OpenCV buffer.
-                cap.grab() 
-                ret, frame = cap.retrieve()
+                ret, frame = cap.read()
                 
                 if not ret:
-                    st.warning("Stream ended or connection lost.")
+                    st.warning("Stream ended or failed to retrieve frame.")
                     break
 
-                # Run YOLO Inference
+                # Inference
                 results = model(frame, conf=conf_threshold, verbose=False)
                 
-                # Annotate and Convert for Streamlit
+                # Plot results and convert BGR (OpenCV) to RGB (Streamlit)
                 annotated_frame = results[0].plot() 
                 annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                 
-                # Update the placeholder
+                # Display in Streamlit
                 frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
 
             cap.release()
 
         except Exception as e:
-            st.error(f"An error occurred: {e}")
-            st.info("Try updating yt-dlp: pip install -U yt-dlp")
+            st.error(f"Critical Error: {e}")
     else:
-        frame_placeholder.info("Enter a URL and check 'Start Detection' to begin.")
+        frame_placeholder.info("Click 'Start Processing' to begin the stream.")
 
 if __name__ == "__main__":
     main()
