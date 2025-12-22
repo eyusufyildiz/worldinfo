@@ -1,71 +1,62 @@
 import cv2
 import streamlit as st
 from ultralytics import YOLO
-import numpy as np
-import time
 import yt_dlp
+import numpy as np
 
-def get_youtube_stream(url):
-    """Get stream URL using yt-dlp with specific headers to avoid 429 errors."""
+def get_best_stream(url):
+    """
+    Uses yt-dlp to find a direct video-only or combined MP4 stream.
+    This avoids the HLS/m3u8 segmentation error.
+    """
     ydl_opts = {
-        'format': 'best[ext=mp4]/best',
+        'format': 'best[ext=mp4]/best', # Prioritize MP4 over HLS/m3u8
         'quiet': True,
         'no_warnings': True,
-        # Mimic a real browser to bypass rate limits
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            return info['url']
+            return info.get('url')
     except Exception as e:
-        st.error(f"YouTube Access Error: {e}")
+        st.error(f"Stream extraction failed: {e}")
         return None
 
 def main():
-    st.set_page_config(page_title="YOLOv8 Stream", layout="wide")
-    st.title("🚀 YOLOv8 Detection (Bypass 429 Limit)")
-
-    youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
+    st.title("YOLOv8 YouTube Fix")
     
-    if 'run' not in st.session_state:
-        st.session_state.run = False
-
-    col1, col2 = st.columns(2)
-    if col1.button("Start Detection"):
-        st.session_state.run = True
-    if col2.button("Stop"):
-        st.session_state.run = False
-
-    placeholder = st.empty()
-
-    if st.session_state.run:
-        # Load model only when starting
+    # Input URL
+    url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
+    
+    if st.button("Run Detection"):
         model = YOLO("yolov8n.pt")
-        
-        stream_url = get_youtube_stream(youtube_url)
+        stream_url = get_best_stream(url)
         
         if stream_url:
+            # We add a buffer size to help FFMPEG handle the stream
             cap = cv2.VideoCapture(stream_url)
             
-            # Optimization: Lower resolution for cloud processing
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-            while st.session_state.run:
+            # Use a placeholder for the video
+            video_spot = st.empty()
+            
+            while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
-                    st.error("Lost stream connection. YouTube may have refreshed the URL.")
+                    # If the stream breaks, try to re-extract the URL 
+                    # (YouTube links expire every few minutes)
                     break
-
-                # Inference
-                results = model(frame, conf=0.4, verbose=False)
-                annotated_frame = results[0].plot()
-
-                # Display
-                placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
                 
-                # Yield for Streamlit UI
-                time.sleep(0.01)
-
+                # Resize and Process
+                frame = cv2.resize(frame, (640, 360))
+                results = model(frame, conf=0.4, verbose=False)
+                annotated = results[0].plot()
+                
+                # Convert for Streamlit
+                annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+                video_spot.image(annotated, channels="RGB")
+                
             cap.release()
+            st.warning("Stream ended. This often happens due to YouTube's IP blocking.")
+
+if __name__ == "__main__":
+    main()
