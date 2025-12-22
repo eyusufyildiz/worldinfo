@@ -6,26 +6,26 @@ import time
 from ultralytics import YOLO
 import os
 
+# Configuration
 WIDTH = 640
 HEIGHT = 360
 
 def start_ffmpeg_pipe(youtube_url):
     """
-    Stream YouTube video frames via ffmpeg pipe with anti-blocking headers.
+    Stream YouTube frames using resilient format sorting and impersonation.
     """
-    # 1. Improved yt-dlp command to bypass blocks
-    cmd = [
+    # Use sorting (-S) instead of strict format (-f) to avoid 'Format not available'
+    # This prefers h264 video and aac audio at roughly 360p height
+    ytdlp_cmd = [
         "yt-dlp",
         "--quiet",
         "--no-warnings",
-        # Use different clients to bypass 'bot detection'
-        "--extractor-args", "youtube:player_client=ios,web,android", 
-        # Spoof a real browser User-Agent
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        # If running locally, you can use --cookies-from-browser chrome
-        # On Streamlit Cloud, you might need a cookies.txt file uploaded
-        # "--cookies", "cookies.txt", 
-        "-f", "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        # 1. Impersonate multiple clients to bypass bot detection
+        "--extractor-args", "youtube:player_client=ios,web,android;player_skip=webpage,configs",
+        # 2. Use Format Sorting: 'Find the best h264/aac near 360p'
+        "-S", "vcodec:h264,res:360,acodec:aac",
+        # 3. Safety fallback: if sorting fails, just get the best single file available
+        "-f", "best[ext=mp4]/best",
         "--no-playlist",
         "-o", "-",
         youtube_url
@@ -34,77 +34,81 @@ def start_ffmpeg_pipe(youtube_url):
     ffmpeg_cmd = [
         "ffmpeg",
         "-loglevel", "quiet",
-        "-i", "pipe:0",
-        "-an",
+        "-i", "pipe:0",  # Read from yt-dlp stdout
+        "-an",           # Disable audio for processing
         "-vf", f"scale={WIDTH}:{HEIGHT},fps=10",
         "-f", "rawvideo",
         "-pix_fmt", "bgr24",
-        "pipe:1"
+        "pipe:1"         # Output raw BGR to python
     ]
 
-    ytdlp = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    ffmpeg = subprocess.Popen(
+    # Launch processes
+    ytdlp_proc = subprocess.Popen(ytdlp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    ffmpeg_proc = subprocess.Popen(
         ffmpeg_cmd,
-        stdin=ytdlp.stdout,
+        stdin=ytdlp_proc.stdout,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         bufsize=10**8
     )
 
-    return ffmpeg, ytdlp
+    return ffmpeg_proc, ytdlp_proc
 
 def main():
-    st.set_page_config(layout="wide")
-    st.title("🎥 YouTube Object Detection (Anti-Block Version)")
+    st.set_page_config(page_title="YOLOv8 YouTube Stream", layout="wide")
+    st.title("🎥 Resilient YouTube Object Detection")
+    st.caption("Updated for 2025 YouTube Bot-Detection Bypass")
 
-    st.info("Note: If the stream fails, YouTube may have blocked this IP. Try a different URL or use a cookies.txt file.")
+    url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=smoU272Dv14")
+    conf = st.slider("Confidence Threshold", 0.1, 1.0, 0.4)
+    
+    if st.button("Start Detection"):
+        model = YOLO("yolov8n.pt")
+        
+        with st.spinner("Connecting to YouTube..."):
+            ffmpeg, ytdlp = start_ffmpeg_pipe(url)
 
-    url = st.text_input(
-        "YouTube URL",
-        "https://www.youtube.com/watch?v=smoU272Dv14"
-    )
+        # UI Placeholders
+        image_spot = st.empty()
+        status_spot = st.empty()
+        
+        frame_size = WIDTH * HEIGHT * 3
+        prev_time = time.time()
 
-    conf = st.slider("Confidence", 0.1, 1.0, 0.4)
+        try:
+            while True:
+                # Read raw bytes from ffmpeg
+                raw_frame = ffmpeg.stdout.read(frame_size)
+                
+                if len(raw_frame) != frame_size:
+                    # Check if yt-dlp sent an error message
+                    err = ytdlp.stderr.read().decode()
+                    if err:
+                        st.error(f"YouTube Error: {err}")
+                    else:
+                        st.warning("Stream ended unexpectedly.")
+                    break
 
-    if not st.button("Start"):
-        return
+                # Convert to numpy and process
+                frame = np.frombuffer(raw_frame, np.uint8).reshape((HEIGHT, WIDTH, 3))
+                
+                # YOLO Inference
+                results = model(frame, conf=conf, verbose=False)
+                annotated_frame = results[0].plot()
 
-    model = YOLO("yolov8n.pt")
+                # Display in Streamlit
+                display_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                image_spot.image(display_frame, channels="RGB", use_container_width=True)
 
-    with st.spinner("Initializing stream..."):
-        ffmpeg_proc, ytdlp_proc = start_ffmpeg_pipe(url)
+                # Calculate FPS
+                curr_time = time.time()
+                fps = 1 / (curr_time - prev_time)
+                status_spot.text(f"Processing at {fps:.1f} FPS")
+                prev_time = curr_time
 
-    frame_size = WIDTH * HEIGHT * 3
-    image_box = st.empty()
-    fps_box = st.empty()
-
-    prev = time.time()
-
-    try:
-        while True:
-            raw = ffmpeg_proc.stdout.read(frame_size)
-            
-            if len(raw) != frame_size:
-                # Check for errors in yt-dlp
-                st.error("Stream interrupted. YouTube is likely blocking this request.")
-                break
-
-            frame = np.frombuffer(raw, np.uint8).reshape((HEIGHT, WIDTH, 3))
-
-            # Run YOLO
-            results = model(frame, conf=conf, verbose=False)
-            annotated = results[0].plot()
-
-            # Display
-            annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-            image_box.image(annotated, use_container_width=True)
-
-            now = time.time()
-            fps_box.caption(f"FPS: {1/(now-prev):.2f}")
-            prev = now
-    finally:
-        ffmpeg_proc.terminate()
-        ytdlp_proc.terminate()
+        finally:
+            ffmpeg.terminate()
+            ytdlp.terminate()
 
 if __name__ == "__main__":
     main()
