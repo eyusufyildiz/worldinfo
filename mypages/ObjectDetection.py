@@ -1,74 +1,71 @@
 import cv2
 import streamlit as st
 from ultralytics import YOLO
-from cap_from_youtube import cap_from_youtube
+import numpy as np
 import time
+import yt_dlp
+
+def get_youtube_stream(url):
+    """Get stream URL using yt-dlp with specific headers to avoid 429 errors."""
+    ydl_opts = {
+        'format': 'best[ext=mp4]/best',
+        'quiet': True,
+        'no_warnings': True,
+        # Mimic a real browser to bypass rate limits
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return info['url']
+    except Exception as e:
+        st.error(f"YouTube Access Error: {e}")
+        return None
 
 def main():
-    st.set_page_config(page_title="YOLOv8 YouTube Stream", layout="wide")
-    st.title("🚀 YOLOv8 Real-time Detection")
+    st.set_page_config(page_title="YOLOv8 Stream", layout="wide")
+    st.title("🚀 YOLOv8 Detection (Bypass 429 Limit)")
 
-    # Sidebar UI
-    st.sidebar.header("Configuration")
-    youtube_url = st.sidebar.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
-    confidence = st.sidebar.slider("Confidence", 0.0, 1.0, 0.4)
-    # Added frame skip to help with Streamlit Cloud CPU limits
-    frame_skip = st.sidebar.number_input("Process every Nth frame", min_value=1, value=2)
+    youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
     
     if 'run' not in st.session_state:
         st.session_state.run = False
 
-    col1, col2 = st.sidebar.columns(2)
-    if col1.button("Start"):
+    col1, col2 = st.columns(2)
+    if col1.button("Start Detection"):
         st.session_state.run = True
     if col2.button("Stop"):
         st.session_state.run = False
 
-    frame_placeholder = st.empty()
+    placeholder = st.empty()
 
     if st.session_state.run:
-        with st.spinner("Initializing stream..."):
-            model = YOLO("yolov8n.pt")
+        # Load model only when starting
+        model = YOLO("yolov8n.pt")
+        
+        stream_url = get_youtube_stream(youtube_url)
+        
+        if stream_url:
+            cap = cv2.VideoCapture(stream_url)
             
-            # --- Robust Stream Opening ---
-            cap = None
-            # Try 360p first for performance
-            try:
-                cap = cap_from_youtube(youtube_url, '360p')
-            except ValueError:
-                # Fallback to 'best' if 360p is missing
-                try:
-                    cap = cap_from_youtube(youtube_url, 'best')
-                except Exception as e:
-                    st.error(f"Could not open stream: {e}")
-                    st.session_state.run = False
-            
-        if cap and cap.isOpened():
-            frame_count = 0
+            # Optimization: Lower resolution for cloud processing
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
             while st.session_state.run:
                 ret, frame = cap.read()
                 if not ret:
-                    st.warning("Stream ended or connection lost.")
+                    st.error("Lost stream connection. YouTube may have refreshed the URL.")
                     break
 
-                frame_count += 1
-                if frame_count % frame_skip != 0:
-                    continue
-
-                # Run YOLO
-                results = model(frame, conf=confidence)
+                # Inference
+                results = model(frame, conf=0.4, verbose=False)
                 annotated_frame = results[0].plot()
 
-                # Convert to RGB and display
-                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
-
-                # Small sleep to yield to the Streamlit event loop
+                # Display
+                placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
+                
+                # Yield for Streamlit UI
                 time.sleep(0.01)
 
             cap.release()
-            st.session_state.run = False
-            st.rerun()
-
-if __name__ == "__main__":
-    main()
