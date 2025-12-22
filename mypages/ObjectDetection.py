@@ -1,100 +1,90 @@
 import streamlit as st
-import cv2
+import subprocess
 import numpy as np
-from ultralytics import YOLO
-import yt_dlp
+import cv2
 import time
+from ultralytics import YOLO
 
 
-def get_youtube_stream_url(youtube_url: str) -> str | None:
+WIDTH = 640
+HEIGHT = 360
+
+
+def start_ffmpeg_pipe(youtube_url):
     """
-    Try to extract a playable stream URL without cookies or download.
-    Uses Android client to reduce bot detection.
+    Stream YouTube video frames as raw BGR via ffmpeg pipe
     """
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "format": "best[ext=mp4]/best",
-        "noplaylist": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android"]
-            }
-        }
-    }
+    cmd = [
+        "yt-dlp",
+        "-f", "best[ext=mp4]/best",
+        "-o", "-",
+        "--quiet",
+        youtube_url
+    ]
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=False)
-            return info.get("url")
-    except Exception as e:
-        st.error("YouTube blocked this request from Streamlit Cloud.")
-        st.caption(str(e))
-        return None
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i", "pipe:0",
+        "-f", "rawvideo",
+        "-pix_fmt", "bgr24",
+        "-vf", f"scale={WIDTH}:{HEIGHT}",
+        "pipe:1"
+    ]
+
+    ytdlp = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    ffmpeg = subprocess.Popen(
+        ffmpeg_cmd,
+        stdin=ytdlp.stdout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        bufsize=10**8
+    )
+
+    return ffmpeg
 
 
 def main():
     st.set_page_config(layout="wide")
-    st.title("🎥 YouTube Object Detection (Streamlit Cloud)")
+    st.title("🎥 YouTube Object Detection (Streamlit Cloud – FIXED)")
 
-    youtube_url = st.text_input(
-        "YouTube Video URL",
-        value="https://www.youtube.com/watch?v=smoU272Dv14"
+    url = st.text_input(
+        "YouTube URL",
+        "https://www.youtube.com/watch?v=smoU272Dv14"
     )
 
-    confidence = st.slider(
-        "Detection Confidence",
-        min_value=0.1,
-        max_value=1.0,
-        value=0.4,
-        step=0.05
-    )
+    conf = st.slider("Confidence", 0.1, 1.0, 0.4)
 
-    start = st.button("Start Detection")
-
-    if not start:
+    if not st.button("Start"):
         return
 
-    with st.spinner("Loading model..."):
-        model = YOLO("yolov8n.pt")
+    model = YOLO("yolov8n.pt")
 
-    with st.spinner("Connecting to YouTube stream..."):
-        stream_url = get_youtube_stream_url(youtube_url)
+    with st.spinner("Starting stream..."):
+        ffmpeg = start_ffmpeg_pipe(url)
 
-    if not stream_url:
-        return
+    frame_size = WIDTH * HEIGHT * 3
+    image_box = st.empty()
+    fps_box = st.empty()
 
-    cap = cv2.VideoCapture(stream_url)
+    prev = time.time()
 
-    if not cap.isOpened():
-        st.error("Failed to open video stream.")
-        return
-
-    frame_placeholder = st.empty()
-    fps_placeholder = st.empty()
-
-    prev_time = time.time()
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            st.warning("Stream ended or blocked.")
+    while True:
+        raw = ffmpeg.stdout.read(frame_size)
+        if len(raw) != frame_size:
+            st.warning("Stream ended or blocked by YouTube.")
             break
 
-        results = model(frame, conf=confidence, verbose=False)
+        frame = np.frombuffer(raw, np.uint8).reshape((HEIGHT, WIDTH, 3))
 
+        results = model(frame, conf=conf, verbose=False)
         annotated = results[0].plot()
 
         annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-        frame_placeholder.image(annotated, channels="RGB", use_container_width=True)
+        image_box.image(annotated, use_container_width=True)
 
-        curr_time = time.time()
-        fps = 1 / max(curr_time - prev_time, 1e-6)
-        prev_time = curr_time
-
-        fps_placeholder.caption(f"FPS: {fps:.2f}")
-
-    cap.release()
+        now = time.time()
+        fps_box.caption(f"FPS: {1/(now-prev):.2f}")
+        prev = now
 
 
 if __name__ == "__main__":
