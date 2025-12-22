@@ -5,9 +5,7 @@ import yt_dlp
 
 def main():
     st.title("🚀 YOLOv8 YouTube Object Detector")
-    st.markdown("This app detects objects from a YouTube stream using YOLOv8.")
-
-    # User Inputs
+    
     video_url = st.text_input(
         "YouTube Video URL", 
         value="https://www.youtube.com/watch?v=smoU272Dv14"
@@ -15,31 +13,36 @@ def main():
     
     conf_level = st.slider("Confidence Threshold", 0.0, 1.0, 0.4, 0.05)
 
-    # Cache the model to avoid reloading on every interaction
     @st.cache_resource
     def load_yolo_model():
+        # Using the smallest model for cloud efficiency
         return YOLO("yolov8n.pt")
 
     model = load_yolo_model()
 
     if st.button("Analyze Video"):
-        # Configure yt-dlp to get a direct stream URL
+        # Specific options to avoid M3U8/HLS and get a direct MP4 link
         ydl_opts = {
-            'format': 'best[ext=mp4]/best',
+            'format': 'best[ext=mp4]',  # Strictly prefer MP4
             'quiet': True,
             'no_warnings': True,
+            'force_generic_extractor': False,
         }
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=False)
+                # Select the direct URL
                 stream_url = info['url']
 
-            # Open video capture
             cap = cv2.VideoCapture(stream_url)
-            frame_placeholder = st.empty()
             
-            # Use a container for the stop button logic
+            # Check if cap is actually opened
+            if not cap.isOpened():
+                st.error("OpenCV could not open the video stream. This may be due to YouTube's bot protection.")
+                return
+
+            frame_placeholder = st.empty()
             stop = st.checkbox("Stop Stream")
 
             while cap.isOpened() and not stop:
@@ -47,23 +50,20 @@ def main():
                 if not ret:
                     break
 
-                # Object Detection
+                # YOLO Inference
                 results = model.predict(frame, conf=conf_level, verbose=False)
                 
-                # Annotate frame
+                # Annotate and Convert BGR to RGB
                 res_plotted = results[0].plot()
-                
-                # Streamlit uses RGB, OpenCV uses BGR
                 res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
 
-                # Update the image in the placeholder
+                # Update the image
                 frame_placeholder.image(res_rgb, channels="RGB", use_container_width=True)
 
             cap.release()
 
         except Exception as e:
-            st.error(f"Error fetching video: {e}")
-            st.info("YouTube sometimes blocks automated requests from cloud IPs. If this persists, try a different video or check for yt-dlp updates.")
+            st.error(f"Stream Error: {e}")
 
 if __name__ == "__main__":
     main()
