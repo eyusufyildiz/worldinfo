@@ -1,73 +1,76 @@
 import streamlit as st
 import cv2
 from ultralytics import YOLO
-from cap_from_youtube import cap_from_youtube, list_video_streams
+import yt_dlp
+
+def get_stream_url(youtube_url):
+    """
+    Extracts a direct stream URL that is highly compatible with OpenCV.
+    Forces a single 'ext:mp4' format to avoid DASH/SABR split-stream issues.
+    """
+    ydl_opts = {
+        # '18' is the itag for 360p MP4 (Video+Audio combined) - very stable for CV
+        # '22' is the itag for 720p MP4 (Video+Audio combined)
+        # We try 720p first, then fall back to 360p
+        'format': '22/18/best[ext=mp4]', 
+        'quiet': True,
+        'no_warnings': True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=False)
+            return info['url']
+    except Exception as e:
+        st.error(f"yt-dlp error: {e}")
+        return None
 
 def main():
-    st.set_page_config(page_title="YouTube Object Detection", layout="wide")
-    st.title("📺 YouTube Object Detection with Resolution Select")
+    st.set_page_config(page_title="YOLOv8 YouTube Fix", layout="wide")
+    st.title("🚀 High-Compatibility YouTube Detector")
 
-    # 1. Video URL Input
-    video_url = st.text_input(
-        "Enter YouTube Video URL:", 
-        value="https://www.youtube.com/watch?v=smoU272Dv14"
-    )
+    # 1. Inputs
+    url = st.text_input("YouTube URL:", value="https://www.youtube.com/watch?v=smoU272Dv14")
+    conf_level = st.slider("Confidence Threshold", 0.0, 1.0, 0.4, 0.05)
 
-    # 2. Get Available Resolutions
-    # We fetch these dynamically based on the URL provided
-    try:
-        streams, resolutions = list_video_streams(video_url)
-        # resolutions is a numpy array of strings like ['144p', '360p', ...]
-        selected_res = st.selectbox("Select Resolution", options=resolutions, index=len(resolutions)-1)
-    except Exception as e:
-        st.error(f"Could not fetch resolutions: {e}")
-        selected_res = 'best'
-
-    # 3. Confidence Slider
-    confidence_threshold = st.slider(
-        "Confidence Threshold", 
-        min_value=0.0, max_value=1.0, value=0.4, step=0.05
-    )
-
-    # 4. Model Loading (Cached)
+    # 2. Load Model
     @st.cache_resource
-    def load_model():
-        return YOLO('yolov8n.pt') 
-    
-    model = load_model()
+    def load_yolo():
+        return YOLO('yolov8n.pt')
+    model = load_yolo()
 
-    # 5. Execution Section
+    # 3. Process
     if st.button("Start Detection"):
-        try:
-            # Use the user-selected resolution
-            cap = cap_from_youtube(video_url, selected_res)
+        stream_url = get_stream_url(url)
+        
+        if stream_url:
+            # Force OpenCV to use the FFMPEG backend explicitly
+            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
             
-            if cap is None or not cap.isOpened():
-                st.error("Error: Could not open video stream.")
+            if not cap.isOpened():
+                st.error("OpenCV could not open this specific format. Try another video.")
                 return
 
             frame_placeholder = st.empty()
-            stop_btn = st.button("Stop Processing")
+            
+            # Use a checkbox as a 'Stop' toggle to avoid button-state resets
+            stop_process = st.checkbox("Stop Stream")
 
-            while cap.isOpened() and not stop_btn:
+            while cap.isOpened() and not stop_process:
                 ret, frame = cap.read()
                 if not ret:
                     break
 
-                # YOLO Inference
-                results = model(frame, conf=confidence_threshold, stream=True)
-
-                for result in results:
-                    annotated_frame = result.plot()
+                # YOLO Inference (stream=True for memory efficiency)
+                results = model(frame, conf=conf_level, stream=True)
+                
+                for r in results:
+                    annotated_frame = r.plot()
                     # Convert BGR to RGB for Streamlit
-                    annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                    frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
+                    rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                    frame_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
             cap.release()
-            st.success("Finished.")
-
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+            st.write("Stream ended.")
 
 if __name__ == "__main__":
     main()
