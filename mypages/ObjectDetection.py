@@ -1,64 +1,69 @@
 import streamlit as st
 import cv2
 from ultralytics import YOLO
-from cap_from_youtube import cap_from_youtube
+import yt_dlp
 
 def main():
-    st.title("YouTube Object Detection")
-    st.write("Detect objects in real-time from a YouTube URL using YOLOv8.")
+    st.title("🚀 YOLOv8 YouTube Object Detector")
+    st.markdown("This app detects objects from a YouTube stream using YOLOv8.")
 
-    # Input section
+    # User Inputs
     video_url = st.text_input(
         "YouTube Video URL", 
         value="https://www.youtube.com/watch?v=smoU272Dv14"
     )
     
-    confidence_threshold = st.slider(
-        "Confidence Threshold", 
-        min_value=0.0, 
-        max_value=1.0, 
-        value=0.4, 
-        step=0.05
-    )
+    conf_level = st.slider("Confidence Threshold", 0.0, 1.0, 0.4, 0.05)
 
-    # Load YOLO model (Small version for better cloud performance)
+    # Cache the model to avoid reloading on every interaction
     @st.cache_resource
-    def load_model():
+    def load_yolo_model():
         return YOLO("yolov8n.pt")
 
-    model = load_model()
+    model = load_yolo_model()
 
-    if st.button("Start Detection"):
+    if st.button("Analyze Video"):
+        # Configure yt-dlp to get a direct stream URL
+        ydl_opts = {
+            'format': 'best[ext=mp4]/best',
+            'quiet': True,
+            'no_warnings': True,
+        }
+
         try:
-            # Use cap_from_youtube for efficient streaming
-            cap = cap_from_youtube(video_url, "720p")
-            
-            # Placeholder for the video frames
-            frame_placeholder = st.empty()
-            stop_button = st.button("Stop")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+                stream_url = info['url']
 
-            while cap.isOpened() and not stop_button:
+            # Open video capture
+            cap = cv2.VideoCapture(stream_url)
+            frame_placeholder = st.empty()
+            
+            # Use a container for the stop button logic
+            stop = st.checkbox("Stop Stream")
+
+            while cap.isOpened() and not stop:
                 ret, frame = cap.read()
                 if not ret:
-                    st.write("Video stream ended or failed.")
                     break
 
-                # Run YOLOv8 inference
-                results = model(frame, conf=confidence_threshold, verbose=False)
+                # Object Detection
+                results = model.predict(frame, conf=conf_level, verbose=False)
+                
+                # Annotate frame
+                res_plotted = results[0].plot()
+                
+                # Streamlit uses RGB, OpenCV uses BGR
+                res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
 
-                # Visualize results on the frame
-                annotated_frame = results[0].plot()
-
-                # Convert BGR to RGB for Streamlit
-                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-
-                # Display the frame
-                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
+                # Update the image in the placeholder
+                frame_placeholder.image(res_rgb, channels="RGB", use_container_width=True)
 
             cap.release()
-            
+
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error fetching video: {e}")
+            st.info("YouTube sometimes blocks automated requests from cloud IPs. If this persists, try a different video or check for yt-dlp updates.")
 
 if __name__ == "__main__":
     main()
