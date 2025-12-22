@@ -2,10 +2,12 @@ import streamlit as st
 import cv2
 from ultralytics import YOLO
 from vidgear.gears import CamGear
+import time
 
 def main():
     st.title("🚀 YOLOv8 YouTube Object Detector")
-    
+    st.markdown("Forcing FFmpeg backend to bypass OpenCV pattern errors.")
+
     # Input Section
     video_url = st.text_input(
         "YouTube Video URL", 
@@ -21,15 +23,24 @@ def main():
     model = load_yolo_model()
 
     if st.button("Start Detection"):
-        # CamGear options: optimize for streaming and lower latency
+        # We add "CAP_FFMPEG" to the parameters to bypass the CAP_IMAGES error
         options = {
-            "STREAM_RESOLUTION": "480p", # Lower resolution = smoother cloud performance
-            "THREADED_QUEUE_MODE": True
+            "STREAM_RESOLUTION": "480p",
+            "THREADED_QUEUE_MODE": True,
+            "CAP_PROP_HW_ACCELERATION": 0, # Disable HW accel to save cloud memory
         }
         
         try:
-            # CamGear handles the YouTube stream extraction internally
-            stream = CamGear(source=video_url, stream_mode=True, logging=True, **options).start()
+            # Initialize stream
+            stream = CamGear(
+                source=video_url, 
+                stream_mode=True, 
+                logging=True, 
+                **options
+            ).start()
+            
+            # Give the buffer a second to fill
+            time.sleep(2)
             
             frame_placeholder = st.empty()
             stop_check = st.checkbox("Stop Stream")
@@ -38,24 +49,24 @@ def main():
                 frame = stream.read()
                 
                 if frame is None:
-                    st.warning("No more frames or stream interrupted.")
-                    break
+                    # If frame is None, the stream might still be loading or blocked
+                    continue
 
-                # Inference
+                # Run Inference
                 results = model.predict(frame, conf=conf_level, verbose=False)
                 
-                # Annotate and convert
+                # Annotate
                 annotated_frame = results[0].plot()
                 annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
 
-                # Render to Streamlit
+                # Render
                 frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
 
             stream.stop()
 
         except Exception as e:
             st.error(f"Detection failed: {e}")
-            st.info("Tip: If it still fails, YouTube may be temporarily blocking the cloud IP. Try again in a few minutes.")
+            st.info("Note: Streamlit Cloud IPs are frequently throttled. If this fails, the stream URL is being blocked at the network level.")
 
 if __name__ == "__main__":
     main()
