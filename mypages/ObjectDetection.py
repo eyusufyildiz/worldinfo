@@ -15,21 +15,29 @@ def start_ffmpeg_pipe(youtube_url):
     Stream YouTube video frames as raw BGR via ffmpeg pipe
     """
     cmd = [
-        "yt-dlp",
-        "-f", "best[ext=mp4]/best",
-        "-o", "-",
-        "--quiet",
-        youtube_url
-    ]
+    "yt-dlp",
+    "--quiet",
+    "--no-warnings",
+    "--merge-output-format", "mp4",
+    "-f", "bv*[ext=mp4][height<=360]+ba[ext=m4a]/b[ext=mp4]/b",
+    "--extractor-args", "youtube:player_client=android",
+    "--no-playlist",
+    "-o", "-",
+    youtube_url
+]
+
 
     ffmpeg_cmd = [
-        "ffmpeg",
-        "-i", "pipe:0",
-        "-f", "rawvideo",
-        "-pix_fmt", "bgr24",
-        "-vf", f"scale={WIDTH}:{HEIGHT}",
-        "pipe:1"
-    ]
+    "ffmpeg",
+    "-loglevel", "quiet",
+    "-i", "pipe:0",
+    "-an",
+    "-vf", f"scale={WIDTH}:{HEIGHT},fps=10",
+    "-f", "rawvideo",
+    "-pix_fmt", "bgr24",
+    "pipe:1"
+]
+
 
     ytdlp = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     ffmpeg = subprocess.Popen(
