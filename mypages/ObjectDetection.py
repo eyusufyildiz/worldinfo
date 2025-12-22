@@ -16,15 +16,15 @@ def start_ffmpeg_pipe(youtube_url):
     """
     # Use sorting (-S) instead of strict format (-f) to avoid 'Format not available'
     # This prefers h264 video and aac audio at roughly 360p height
+    PO_TOKEN = "QUFFLUhqbFM4bVBqTlhaeHZlRU1kUUJJRjVqR0VYOG5Dd3w\u003d"
+    
     ytdlp_cmd = [
         "yt-dlp",
         "--quiet",
         "--no-warnings",
-        # 1. Impersonate multiple clients to bypass bot detection
-        "--extractor-args", "youtube:player_client=ios,web,android;player_skip=webpage,configs",
-        # 2. Use Format Sorting: 'Find the best h264/aac near 360p'
-        "-S", "vcodec:h264,res:360,acodec:aac",
-        # 3. Safety fallback: if sorting fails, just get the best single file available
+        # Add the po_token to the extractor args
+        "--extractor-args", f"youtube:player_client=web;po_token=web+{PO_TOKEN}",
+        "-S", "vcodec:h264,res:360",
         "-f", "best[ext=mp4]/best",
         "--no-playlist",
         "-o", "-",
