@@ -24,3 +24,4 @@ cap_from_youtube
 # This fetches the latest fixes for SABR streaming
 psutil
 vidgear
+streamlink
