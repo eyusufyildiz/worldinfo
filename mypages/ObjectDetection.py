@@ -1,68 +1,64 @@
 import streamlit as st
 import cv2
 from ultralytics import YOLO
-import yt_dlp
-
-def get_stream_url(youtube_url):
-    ydl_opts = {
-        # Format 18 is the most stable 360p MP4 format for OpenCV
-        'format': '18', 
-        'quiet': True,
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=False)
-            return info['url']
-    except Exception:
-        # Fallback to best if 18 isn't available
-        ydl_opts = {'format': 'best', 'quiet': True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=False)
-            return info['url']
+from cap_from_youtube import cap_from_youtube
 
 def main():
-    st.set_page_config(page_title="YouTube Object Detection", layout="wide")
-    st.title("📺 Robust YouTube Object Detection")
+    st.title("YouTube Object Detection")
+    st.write("Detect objects in real-time from a YouTube URL using YOLOv8.")
 
-    video_url = st.text_input("YouTube URL:", value="https://www.youtube.com/watch?v=smoU272Dv14")
-    conf_level = st.slider("Confidence", 0.0, 1.0, 0.4, 0.05)
+    # Input section
+    video_url = st.text_input(
+        "YouTube Video URL", 
+        value="https://www.youtube.com/watch?v=smoU272Dv14"
+    )
+    
+    confidence_threshold = st.slider(
+        "Confidence Threshold", 
+        min_value=0.0, 
+        max_value=1.0, 
+        value=0.4, 
+        step=0.05
+    )
 
+    # Load YOLO model (Small version for better cloud performance)
     @st.cache_resource
     def load_model():
-        return YOLO('yolov8n.pt')
+        return YOLO("yolov8n.pt")
+
     model = load_model()
 
     if st.button("Start Detection"):
-        stream_url = get_stream_url(video_url)
-        
-        if stream_url:
-            # We remove the CAP_FFMPEG flag to let OpenCV choose the best available 
-            # while providing a simpler single-stream URL
-            cap = cv2.VideoCapture(stream_url)
+        try:
+            # Use cap_from_youtube for efficient streaming
+            cap = cap_from_youtube(video_url, "720p")
             
-            # Check if it opened, if not, try with a specific environment fix
-            if not cap.isOpened():
-                st.error("OpenCV backend error. Try running: pip install opencv-python-headless")
-                return
-
+            # Placeholder for the video frames
             frame_placeholder = st.empty()
-            stop_btn = st.checkbox("Stop Stream")
+            stop_button = st.button("Stop")
 
-            while cap.isOpened() and not stop_btn:
+            while cap.isOpened() and not stop_button:
                 ret, frame = cap.read()
                 if not ret:
+                    st.write("Video stream ended or failed.")
                     break
 
-                # YOLO Inference
-                results = model(frame, conf=conf_level, stream=True)
-                
-                for r in results:
-                    annotated_frame = r.plot()
-                    rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                    frame_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+                # Run YOLOv8 inference
+                results = model(frame, conf=confidence_threshold, verbose=False)
+
+                # Visualize results on the frame
+                annotated_frame = results[0].plot()
+
+                # Convert BGR to RGB for Streamlit
+                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+
+                # Display the frame
+                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
 
             cap.release()
-            st.write("Stream ended.")
+            
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
