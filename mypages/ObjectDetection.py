@@ -2,157 +2,119 @@ import streamlit as st
 import cv2
 import subprocess
 from ultralytics import YOLO
-from PIL import Image
 import torch
 import time
 import random
+import numpy as np
 
 # ----------------------------
-# Streamlit page setup
-# ----------------------------
-st.set_page_config(layout="wide")
-st.title("📺 YouTube Object Detection (Streamlit Cloud)")
-
-# ----------------------------
-# User Inputs
-# ----------------------------
-safe_mode = st.checkbox("Enable Safe Mode (Anti-Ban)", value=True)
-
-youtube_url = st.text_input(
-    "YouTube URL", "https://www.youtube.com/watch?v=ztmY_cCtUl0"
-)
-resolution = st.selectbox(
-    "Select video resolution",
-    ["144p", "240p", "360p", "480p", "720p", "1080p"],
-    index=4,
-)
-confidence = st.slider("Detection confidence", 0.1, 0.9, 0.4)
-start = st.button("▶ Start Detection")
-
-
-# ----------------------------
-# Load YOLO model
+# Configuration & Model Loading
 # ----------------------------
 @st.cache_resource
 def load_model():
-    model = YOLO("yolov8n.pt")  # lightweight & fast
+    # Use the Nano version for speed on Streamlit Cloud
+    model = YOLO("yolov8n.pt") 
     if torch.cuda.is_available():
         model.to("cuda")
-        model.fuse()
     return model
 
-
-model = load_model()
-
-
-# ----------------------------
-# Get YouTube stream URL
-# ----------------------------
 def get_stream_url(youtube_url, resolution, safe_mode=True):
-    """Return direct stream URL using yt-dlp without printing logs."""
-    cache_key = f"{youtube_url}_{resolution}"
-    if cache_key in st.session_state:
-        st.info("Using cached stream URL")
-        return st.session_state[cache_key]
+    """Return direct stream URL using yt-dlp."""
+    # Use sorting and better headers to avoid 403 Forbidden errors
+    res_val = resolution.replace('p', '')
+    
+    cmd = [
+        "yt-dlp",
+        "--quiet",
+        "--no-warnings",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "--extractor-args", "youtube:player_client=ios,web,android",
+        "-f", f"bestvideo[height<={res_val}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "-g", youtube_url,
+    ]
 
     if safe_mode:
-        time.sleep(random.uniform(5, 10))
-        cmd = [
-            "yt-dlp",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "--sleep-interval", "1",
-            "--max-sleep-interval", "3",
-            "--sleep-requests", "1",
-            "--retries", "3",
-            "-f", f"bestvideo[height<={resolution.replace('p','')}]+bestaudio/best",
-            "-g", youtube_url,
-        ]
-    else:
-        cmd = [
-            "yt-dlp",
-            "-f", f"bestvideo[height<={resolution.replace('p','')}]+bestaudio/best",
-            "-g", youtube_url,
-        ]
+        time.sleep(random.uniform(1, 3))
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        stream_url = result.stdout.strip()
-        st.session_state[cache_key] = stream_url
-        return stream_url
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else str(e)
-        if any(word in error_msg.lower() for word in ["banned", "403", "429", "rate limit", "blocked"]):
-            st.error("YouTube IP ban detected. Try using a VPN, proxy, or wait 10-30 minutes before retrying.")
-        else:
-            st.error(
-                "Failed to get stream URL. Make sure yt-dlp and ffmpeg are installed "
-                "and the video is accessible. Error: " + error_msg[:200]
-            )
+        st.error(f"Error fetching stream: {e.stderr}")
         return None
 
-
 # ----------------------------
-# Run object detection
+# Main Application
 # ----------------------------
-if start and youtube_url:
-    stream_url = get_stream_url(youtube_url, resolution, safe_mode)
-    if stream_url:
-        cap = cv2.VideoCapture(stream_url)
-        if not cap.isOpened():
-            st.error("Failed to open video stream. Check the URL or resolution.")
-        else:
-            st.success("Stream opened! Running object detection...")
+def main():
+    st.set_page_config(page_title="YouTube YOLOv8", layout="wide")
+    st.title("📺 YouTube Object Detection")
+    st.markdown("This app uses **YOLOv8** to detect objects in real-time from a YouTube stream.")
 
+    # Sidebar Settings
+    st.sidebar.header("Settings")
+    safe_mode = st.sidebar.checkbox("Anti-Ban Mode", value=True)
+    resolution = st.sidebar.selectbox(
+        "Resolution", ["144p", "240p", "360p", "480p", "720p"], index=2
+    )
+    confidence = st.sidebar.slider("Confidence", 0.1, 1.0, 0.4)
+    
+    # Input
+    youtube_url = st.text_input("YouTube URL", "https://www.youtube.com/watch?v=smoU272Dv14")
+    
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        start_button = st.button("▶ Start")
+    with col2:
+        stop_button = st.button("⏹ Stop")
+
+    # Load Model
+    model = load_model()
+
+    if start_button and youtube_url:
+        with st.spinner("Bypassing YouTube filters and fetching stream..."):
+            stream_url = get_stream_url(youtube_url, resolution, safe_mode)
+
+        if stream_url:
+            cap = cv2.VideoCapture(stream_url)
+            
+            if not cap.isOpened():
+                st.error("Could not open video stream.")
+                return
+
+            # Display area
             frame_placeholder = st.empty()
-            frame_skip = 2
-            frame_count = 0
-
-            # Pause / Resume button
-            paused = False
-            pause_button = st.button("⏸ Pause / Resume")
-
+            fps_placeholder = st.sidebar.empty()
+            
+            # Processing Loop
             while cap.isOpened():
-                if pause_button:
-                    paused = not paused
-
-                if paused:
-                    time.sleep(0.1)
-                    continue
-
+                if stop_button:
+                    break
+                
                 ret, frame = cap.read()
                 if not ret:
+                    st.warning("Stream ended or interrupted.")
                     break
 
-                frame_count += 1
-                if frame_count % frame_skip != 0:
-                    continue
+                t1 = time.time()
+                
+                # YOLO Inference
+                results = model(frame, conf=confidence, verbose=False)
+                annotated_frame = results[0].plot()
 
-                # Resize frame for speed
-                frame = cv2.resize(frame, (1280, 768))
+                # Convert BGR to RGB
+                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
 
-                # YOLO detection
-                try:
-                    results = model(frame, conf=confidence)
-                    annotated = results[0].plot()
-                except Exception:
-                    continue  # skip frame silently
-
-                # Convert BGR → RGB for Streamlit display
-                annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-
-                # Display frame in Streamlit
-                frame_placeholder.image(
-                    annotated,
-                    channels="RGB",
-                    width=800,  # use width instead of deprecated use_column_width
-                )
-
-                time.sleep(0.03)  # smooth playback
+                # Display
+                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
+                
+                # FPS Calculation
+                t2 = time.time()
+                fps = 1 / (t2 - t1)
+                fps_placeholder.metric("FPS", f"{fps:.2f}")
 
             cap.release()
-            st.success("✅ Detection completed.")
+            st.info("Stream stopped.")
+
+if __name__ == "__main__":
+    main()
