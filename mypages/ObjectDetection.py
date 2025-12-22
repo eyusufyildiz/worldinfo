@@ -12,8 +12,9 @@ def main():
     st.sidebar.header("Configuration")
     youtube_url = st.sidebar.text_input("YouTube URL", "https://www.youtube.com/watch?v=j-hH64410UM")
     confidence = st.sidebar.slider("Confidence", 0.0, 1.0, 0.4)
+    # Added frame skip to help with Streamlit Cloud CPU limits
+    frame_skip = st.sidebar.number_input("Process every Nth frame", min_value=1, value=2)
     
-    # Use session state to handle the "Stop" button effectively
     if 'run' not in st.session_state:
         st.session_state.run = False
 
@@ -26,38 +27,48 @@ def main():
     frame_placeholder = st.empty()
 
     if st.session_state.run:
-        # Load Model
-        model = YOLO("yolov8n.pt")
+        with st.spinner("Initializing stream..."):
+            model = YOLO("yolov8n.pt")
+            
+            # --- Robust Stream Opening ---
+            cap = None
+            # Try 360p first for performance
+            try:
+                cap = cap_from_youtube(youtube_url, '360p')
+            except ValueError:
+                # Fallback to 'best' if 360p is missing
+                try:
+                    cap = cap_from_youtube(youtube_url, 'best')
+                except Exception as e:
+                    st.error(f"Could not open stream: {e}")
+                    st.session_state.run = False
+            
+        if cap and cap.isOpened():
+            frame_count = 0
+            while st.session_state.run:
+                ret, frame = cap.read()
+                if not ret:
+                    st.warning("Stream ended or connection lost.")
+                    break
 
-        # Open the stream using cap_from_youtube
-        # '144p' or '360p' is recommended for Streamlit Cloud to save bandwidth/CPU
-        cap = cap_from_youtube(youtube_url, '360p')
+                frame_count += 1
+                if frame_count % frame_skip != 0:
+                    continue
 
-        if not cap.isOpened():
-            st.error("Failed to open stream. The video might be private or restricted.")
-            return
+                # Run YOLO
+                results = model(frame, conf=confidence)
+                annotated_frame = results[0].plot()
 
-        while cap.isOpened() and st.session_state.run:
-            ret, frame = cap.read()
-            if not ret:
-                st.write("Stream ended or failed.")
-                break
+                # Convert to RGB and display
+                annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
 
-            # Detection
-            results = model(frame, conf=confidence)
-            annotated_frame = results[0].plot()
+                # Small sleep to yield to the Streamlit event loop
+                time.sleep(0.01)
 
-            # Convert to RGB for Streamlit
-            annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-
-            # Display the frame
-            frame_placeholder.image(annotated_frame, channels="RGB", use_container_width=True)
-
-            # Essential for Streamlit's refresh cycle
-            time.sleep(0.01)
-
-        cap.release()
-        st.session_state.run = False
+            cap.release()
+            st.session_state.run = False
+            st.rerun()
 
 if __name__ == "__main__":
     main()
