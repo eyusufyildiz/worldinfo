@@ -1,4 +1,5 @@
 streamlit
+streamlit-extras==0.3.6
 streamlit_option_menu
 streamlit_autorefresh
 streamlit_javascript
