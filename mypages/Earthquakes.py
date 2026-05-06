@@ -87,55 +87,7 @@ def build_earthquake_map(quakes):
         tiles="OpenStreetMap",
         prefer_canvas=True,
     )
-    marker_data = quakes[["lat", "lon", "mag", "place", "time", "url"]].values.tolist()
-    marker_callback = """
-    function (row) {
-        var magnitude = Number(row[2] || 0);
-        var size = Math.max(20, magnitude * 10);
-        var color = magnitude >= 5 ? '#c92a2a' : magnitude >= 3 ? '#f08c00' : '#1971c2';
-        var tooltip = '<b>Magnitude:</b> ' + row[2] +
-            '<br><b>Place:</b> ' + row[3] +
-            '<br><b>Time:</b> ' + row[4] +
-            '<br><b>URL:</b> ' + row[5];
-        var icon = L.divIcon({
-            className: 'earthquake-marker',
-            html: '<span style="background:' + color + '; width:' + size + 'px; height:' + size + 'px;">' + row[2] + '</span>',
-            iconSize: [size, size],
-            iconAnchor: [size / 2, size / 2]
-        });
-        var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
-
-        marker.bindTooltip(tooltip, {
-            sticky: true,
-            direction: 'top',
-            opacity: 0.95
-        });
-
-        return marker;
-    }
-    """
-    folium.Element("""
-    <style>
-        .earthquake-marker {
-            background: transparent;
-            border: 0;
-        }
-        .earthquake-marker span {
-            align-items: center;
-            border: 2px solid rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-            color: #ffffff;
-            display: flex;
-            font-size: 11px;
-            font-weight: 700;
-            justify-content: center;
-            line-height: 1;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
-        }
-    </style>
-    """).add_to(quake_map.get_root().header)
-    FastMarkerCluster(marker_data, callback=marker_callback).add_to(quake_map)
+    FastMarkerCluster(quakes[["lat", "lon"]].values.tolist()).add_to(quake_map)
 
     return quake_map
 
