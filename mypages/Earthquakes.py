@@ -2,11 +2,8 @@ import pandas as pd
 import json, requests
 import streamlit as st
 import folium
-from folium.plugins import FastMarkerCluster
 from streamlit_folium import st_folium
-from datetime import datetime
 from pathlib import Path
-from utils import tools as tool
 import time
 
 #tool.streamlit_config(page_title="🌀 Eartquakes", page_icon="🌀")
@@ -80,14 +77,32 @@ def load_earthquake_data(url):
 
 
 def build_earthquake_map(quakes):
-    center = [quakes["lat"].mean(), quakes["lon"].mean()]
+    center = [float(quakes["lat"].mean()), float(quakes["lon"].mean())]
     quake_map = folium.Map(
         location=center,
         zoom_start=2,
         tiles="OpenStreetMap",
         prefer_canvas=True,
     )
-    FastMarkerCluster(quakes[["lat", "lon"]].values.tolist()).add_to(quake_map)
+
+    for quake in quakes.itertuples(index=False):
+        magnitude = float(quake.mag) if pd.notna(quake.mag) else 0.0
+        tooltip = (
+            f"Magnitude: {magnitude}<br>"
+            f"Place: {quake.place}<br>"
+            f"Time: {quake.time}<br>"
+            f"URL: {quake.url}"
+        )
+        color = "#c92a2a" if magnitude >= 5 else "#f08c00" if magnitude >= 3 else "#1971c2"
+        folium.CircleMarker(
+            location=[float(quake.lat), float(quake.lon)],
+            radius=max(4, magnitude * 2),
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.75,
+            tooltip=tooltip,
+        ).add_to(quake_map)
 
     return quake_map
 
