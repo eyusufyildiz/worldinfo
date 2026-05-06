@@ -1,11 +1,58 @@
 import pandas as pd
 import json, requests
 import streamlit as st
+import folium
+from streamlit_folium import st_folium
 from datetime import datetime
 from utils import tools as tool
 import time
 
 #tool.streamlit_config(page_title="🌀 Eartquakes", page_icon="🌀")
+
+def build_earthquake_map(quakes):
+    center = [quakes["lat"].mean(), quakes["lon"].mean()]
+    quake_map = folium.Map(location=center, zoom_start=2, tiles="OpenStreetMap")
+
+    for _, quake in quakes.iterrows():
+        popup = folium.Popup(
+            f"""
+            <b>Magnitude:</b> {quake['mag']}<br>
+            <b>Place:</b> {quake['place']}<br>
+            <b>Time:</b> {quake['time']}<br>
+            <a href="{quake['url']}" target="_blank">USGS details</a>
+            """,
+            max_width=300,
+        )
+        folium.CircleMarker(
+            location=[quake["lat"], quake["lon"]],
+            radius=max(4, quake["mag"] * 2),
+            color="#d9480f",
+            fill=True,
+            fill_color="#f08c00",
+            fill_opacity=0.75,
+            popup=popup,
+            tooltip=f"M{quake['mag']} - {quake['place']}",
+        ).add_to(quake_map)
+
+    return quake_map
+
+
+def filter_quakes_by_bounds(quakes, bounds):
+    if not bounds:
+        return quakes
+
+    south = bounds["_southWest"]["lat"]
+    north = bounds["_northEast"]["lat"]
+    west = bounds["_southWest"]["lng"]
+    east = bounds["_northEast"]["lng"]
+
+    lat_filter = quakes["lat"].between(south, north)
+    if west <= east:
+        lon_filter = quakes["lon"].between(west, east)
+    else:
+        lon_filter = (quakes["lon"] >= west) | (quakes["lon"] <= east)
+
+    return quakes[lat_filter & lon_filter]
 
 def quakes():
     opt_list={
@@ -65,7 +112,25 @@ def quakes():
         st.write(f"Number of {mgn} eartquake(s) in {past}: {len(quakes)}")
     
         if len(quakes):
-            st.map(quakes)
+            map_data = st_folium(
+                build_earthquake_map(quakes),
+                height=500,
+                use_container_width=True,
+                key=f"earthquake-map-{past}-{mgn}",
+            ) or {}
+            visible_quakes = filter_quakes_by_bounds(quakes, map_data.get("bounds")).copy()
+
             with st.expander("Earthquakes list"):
-                quakes.sort_values(by=['mag'], ascending=False)
-                st.write(quakes)
+                st.write(f"Visible earthquake(s): {len(visible_quakes)}")
+                visible_quakes = visible_quakes.sort_values(by=['mag'], ascending=False)
+                st.dataframe(
+                    visible_quakes,
+                    column_config={
+                        "url": st.column_config.LinkColumn(
+                            "url",
+                            display_text="USGS details",
+                        )
+                    },
+                    hide_index=True,
+                    use_container_width=True,
+                )

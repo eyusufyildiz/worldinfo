@@ -1,4 +1,6 @@
 streamlit
+streamlit-folium==0.15.0
+folium
 streamlit_option_menu
 streamlit_autorefresh
 streamlit_javascript
