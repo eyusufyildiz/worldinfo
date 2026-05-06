@@ -4,10 +4,58 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from datetime import datetime
+from pathlib import Path
 from utils import tools as tool
 import time
 
 #tool.streamlit_config(page_title="🌀 Eartquakes", page_icon="🌀")
+
+CACHE_FILE = Path(__file__).with_name("earthquakes_cache.json")
+CACHE_TTL_SECONDS = 10 * 60
+
+
+def read_earthquake_cache():
+    if not CACHE_FILE.exists():
+        return {"feeds": {}}
+
+    try:
+        return json.loads(CACHE_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {"feeds": {}}
+
+
+def write_earthquake_cache(cache):
+    try:
+        CACHE_FILE.write_text(json.dumps(cache))
+    except OSError:
+        pass
+
+
+def get_earthquake_features(url):
+    cache = read_earthquake_cache()
+    feeds = cache.setdefault("feeds", {})
+    cached_feed = feeds.get(url)
+    now = time.time()
+
+    if cached_feed and now - cached_feed.get("fetched_at", 0) < CACHE_TTL_SECONDS:
+        return cached_feed.get("features", [])
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        features = response.json()["features"]
+    except (requests.RequestException, ValueError, KeyError):
+        if cached_feed:
+            return cached_feed.get("features", [])
+        raise
+
+    feeds[url] = {
+        "fetched_at": now,
+        "features": features,
+    }
+    write_earthquake_cache(cache)
+    return features
+
 
 def build_earthquake_map(quakes):
     center = [quakes["lat"].mean(), quakes["lon"].mean()]
@@ -95,12 +143,12 @@ def quakes():
             option = opt_list[opt]
 
     url = f"https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/{option}"
-    res = requests.get(url).json()['features']
+    res = get_earthquake_features(url)
     quakes =[]
 
     if res:
         for q in res :
-            x= q['properties']
+            x= q['properties'].copy()
             x['lat'] = q['geometry']['coordinates'][1]
             x['lon'] = q['geometry']['coordinates'][0]
             x['depth'] = q['geometry']['coordinates'][2]
