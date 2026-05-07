@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import pydeck as pdk
 import requests
 
 try:
@@ -16,6 +17,7 @@ st.set_page_config(page_title="🛰️ ISS (International Space Station) Now", p
 
 ISS_POSITION_URL = "http://api.open-notify.org/iss-now.json"
 ASTROS_URL = "http://api.open-notify.org/astros.json"
+ISS_TRAIL_LIMIT = 24
 
 
 @st.cache_data(ttl=4, show_spinner=False)
@@ -37,11 +39,9 @@ def reverse_geocode_position(lat, lon):
     from geopy.geocoders import Nominatim
 
     geolocator = Nominatim(user_agent="worldinfo_iss_now")
-    rounded_lat = round(float(lat), 1)
-    rounded_lon = round(float(lon), 1)
 
     try:
-        location = geolocator.reverse(f"{rounded_lat}, {rounded_lon}", language="en", timeout=5)
+        location = geolocator.reverse(f"{lat}, {lon}", language="en", timeout=5)
     except Exception:
         return None
 
@@ -49,6 +49,48 @@ def reverse_geocode_position(lat, lon):
         return None
 
     return location.raw.get("address")
+
+
+def update_iss_trail(lat, lon, timestamp):
+    trail = st.session_state.setdefault("iss_trail", [])
+    if not trail or trail[-1]["timestamp"] != timestamp:
+        trail.append({"lat": lat, "lon": lon, "timestamp": timestamp})
+        st.session_state["iss_trail"] = trail[-ISS_TRAIL_LIMIT:]
+
+    return pd.DataFrame(st.session_state["iss_trail"])
+
+
+def draw_live_iss_map(current_position, trail):
+    current_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=current_position,
+        get_position="[lon, lat]",
+        get_radius=180000,
+        get_fill_color=[240, 62, 62, 220],
+        get_line_color=[255, 255, 255],
+        line_width_min_pixels=2,
+        pickable=True,
+    )
+    trail_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=trail,
+        get_position="[lon, lat]",
+        get_radius=55000,
+        get_fill_color=[25, 113, 194, 120],
+    )
+    view_state = pdk.ViewState(
+        latitude=float(current_position.iloc[0]["lat"]),
+        longitude=float(current_position.iloc[0]["lon"]),
+        zoom=1.8,
+        pitch=0,
+    )
+    deck = pdk.Deck(
+        map_style=None,
+        initial_view_state=view_state,
+        layers=[trail_layer, current_layer],
+        tooltip={"text": "ISS\nLat: {lat}\nLon: {lon}\nTime: {timestamp}"},
+    )
+    st.pydeck_chart(deck, use_container_width=True)
 
 
 def number_of_people_now():
@@ -67,8 +109,13 @@ def iss_now1():
     dt = datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
     obj1["timestamp"] = dt
     
-    pos={"lat": float(obj1["iss_position"]['latitude']), "lon": float(obj1["iss_position"]['longitude']) }
+    pos = {
+        "lat": float(obj1["iss_position"]['latitude']),
+        "lon": float(obj1["iss_position"]['longitude']),
+        "timestamp": dt,
+    }
     pd_pos = pd.json_normalize(pos)
+    trail = update_iss_trail(pos["lat"], pos["lon"], pos["timestamp"])
 
     st.markdown("### 🛰️ Current ISS Location")
     st.markdown("The International Space Station is moving at close to 28,000 km/h so its location changes really fast! Where is it right now?")
@@ -78,13 +125,13 @@ def iss_now1():
     lat = obj1["iss_position"]["latitude"]
     st.success( f"**{zaman}**  [{lat}, {lon}]")
 
-    address = reverse_geocode_position(lat, lon)
+    address = reverse_geocode_position(round(float(lat), 1), round(float(lon), 1))
     if address:
         st.write("ISS is now on below address/place:")
         tbl = pd.json_normalize(address)
         st.write( tbl )
 
-    st.map(pd_pos, zoom=3, use_container_width=True)
+    draw_live_iss_map(pd_pos, trail)
     if st_autorefresh:
         st_autorefresh(interval=5000, key="iss-refresh")
 
