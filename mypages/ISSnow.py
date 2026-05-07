@@ -18,7 +18,7 @@ ISS_POSITION_URL = "http://api.open-notify.org/iss-now.json"
 ASTROS_URL = "http://api.open-notify.org/astros.json"
 
 
-@st.cache_data(ttl=25, show_spinner=False)
+@st.cache_data(ttl=4, show_spinner=False)
 def get_iss_position():
     response = requests.get(ISS_POSITION_URL, timeout=5)
     response.raise_for_status()
@@ -86,7 +86,7 @@ def iss_now1():
 
     st.map(pd_pos, zoom=3, use_container_width=True)
     if st_autorefresh:
-        st_autorefresh(interval=30000, key="iss-refresh")
+        st_autorefresh(interval=5000, key="iss-refresh")
 
 
 def iss():
