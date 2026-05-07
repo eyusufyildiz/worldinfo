@@ -3,8 +3,9 @@ import pandas as pd
 from datetime import datetime
 import json
 from pathlib import Path
-import pydeck as pdk
+import folium
 import requests
+from streamlit_folium import st_folium
 
 st.set_page_config(page_title="🛰️ ISS (International Space Station) Now", page_icon="🛰️")
 
@@ -15,7 +16,7 @@ st.set_page_config(page_title="🛰️ ISS (International Space Station) Now", p
 ISS_POSITION_URL = "http://api.open-notify.org/iss-now.json"
 ASTROS_URL = "http://api.open-notify.org/astros.json"
 ISS_TRAIL_FILE = Path(__file__).with_name("iss_positions.json")
-ISS_TRAIL_LIMIT = 180
+ISS_TRAIL_SECONDS = 60 * 60
 
 
 @st.cache_data(ttl=4, show_spinner=False)
@@ -61,21 +62,37 @@ def read_iss_trail():
     if not isinstance(trail, list):
         return []
 
-    return trail[-ISS_TRAIL_LIMIT:]
+    return recent_iss_trail(trail)
 
 
 def write_iss_trail(trail):
     try:
-        ISS_TRAIL_FILE.write_text(json.dumps(trail[-ISS_TRAIL_LIMIT:]))
+        ISS_TRAIL_FILE.write_text(json.dumps(recent_iss_trail(trail)))
     except OSError:
         pass
 
 
+def recent_iss_trail(trail):
+    now = datetime.utcnow()
+    recent_trail = []
+
+    for position in trail:
+        try:
+            timestamp = datetime.strptime(position["timestamp"], "%Y-%m-%d %H:%M:%S")
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        if (now - timestamp).total_seconds() <= ISS_TRAIL_SECONDS:
+            recent_trail.append(position)
+
+    return recent_trail
+
+
 def update_iss_trail(lat, lon, timestamp):
-    trail = st.session_state.setdefault("iss_trail", read_iss_trail())
+    trail = recent_iss_trail(st.session_state.setdefault("iss_trail", read_iss_trail()))
     if not trail or trail[-1]["timestamp"] != timestamp:
         trail.append({"lat": lat, "lon": lon, "timestamp": timestamp})
-        trail = trail[-ISS_TRAIL_LIMIT:]
+        trail = recent_iss_trail(trail)
         st.session_state["iss_trail"] = trail
         write_iss_trail(trail)
 
@@ -111,44 +128,56 @@ def previous_positions(trail):
 def draw_live_iss_map(current_position, trail):
     path_segments = build_path_segments(trail)
     previous_trail = previous_positions(trail)
-    current_layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=current_position,
-        get_position="[lon, lat]",
-        get_radius=70000,
-        get_fill_color=[240, 62, 62, 230],
-        get_line_color=[255, 255, 255],
-        line_width_min_pixels=2,
-        pickable=True,
+    current = current_position.iloc[0]
+    iss_map = folium.Map(
+        location=[float(current["lat"]), float(current["lon"])],
+        zoom_start=3,
+        tiles="OpenStreetMap",
+        prefer_canvas=True,
     )
-    path_layer = pdk.Layer(
-        "LineLayer",
-        data=path_segments,
-        get_source_position="[from_lon, from_lat]",
-        get_target_position="[to_lon, to_lat]",
-        get_color=[46, 119, 214, 190],
-        get_width=3,
+
+    if len(path_segments):
+        path_points = [
+            [float(row["from_lat"]), float(row["from_lon"])]
+            for _, row in path_segments.iterrows()
+        ]
+        last_segment = path_segments.iloc[-1]
+        path_points.append([float(last_segment["to_lat"]), float(last_segment["to_lon"])])
+        folium.PolyLine(path_points, color="#1971c2", weight=3, opacity=0.8).add_to(iss_map)
+
+    for _, position in previous_trail.iterrows():
+        folium.CircleMarker(
+            location=[float(position["lat"]), float(position["lon"])],
+            radius=3,
+            color="#1971c2",
+            fill=True,
+            fill_color="#1971c2",
+            fill_opacity=0.55,
+            tooltip=f"Previous ISS position<br>{position['timestamp']}",
+        ).add_to(iss_map)
+
+    folium.CircleMarker(
+        location=[float(current["lat"]), float(current["lon"])],
+        radius=5,
+        color="#c92a2a",
+        fill=True,
+        fill_color="#f03e3e",
+        fill_opacity=0.9,
+        tooltip=(
+            f"Current ISS position<br>"
+            f"Lat: {current['lat']}<br>"
+            f"Lon: {current['lon']}<br>"
+            f"Time: {current['timestamp']}"
+        ),
+    ).add_to(iss_map)
+
+    st_folium(
+        iss_map,
+        height=500,
+        use_container_width=True,
+        returned_objects=[],
+        key="iss-live-map",
     )
-    trail_layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=previous_trail,
-        get_position="[lon, lat]",
-        get_radius=35000,
-        get_fill_color=[46, 119, 214, 135],
-    )
-    view_state = pdk.ViewState(
-        latitude=float(current_position.iloc[0]["lat"]),
-        longitude=float(current_position.iloc[0]["lon"]),
-        zoom=1.8,
-        pitch=0,
-    )
-    deck = pdk.Deck(
-        map_style=None,
-        initial_view_state=view_state,
-        layers=[path_layer, trail_layer, current_layer],
-        tooltip={"text": "ISS\nLat: {lat}\nLon: {lon}\nTime: {timestamp}"},
-    )
-    st.pydeck_chart(deck, use_container_width=True)
 
 
 def number_of_people_now():
