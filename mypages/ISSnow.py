@@ -6,11 +6,6 @@ from pathlib import Path
 import pydeck as pdk
 import requests
 
-try:
-    from streamlit_autorefresh import st_autorefresh
-except ModuleNotFoundError:
-    st_autorefresh = None
-
 st.set_page_config(page_title="🛰️ ISS (International Space Station) Now", page_icon="🛰️")
 
 # Run the autorefresh about every 2000 milliseconds (2 seconds) and stop
@@ -166,6 +161,7 @@ def number_of_people_now():
     data1  = pd.json_normalize(people)
     st.write(data1)
 
+@st.fragment(run_every="5s")
 def iss_now1():
     obj1 = get_iss_position()
     ts = obj1["timestamp"] 
@@ -195,8 +191,6 @@ def iss_now1():
         st.write( tbl )
 
     draw_live_iss_map(pd_pos, trail)
-    if st_autorefresh:
-        st_autorefresh(interval=5000, key="iss-refresh")
 
 
 def iss():
