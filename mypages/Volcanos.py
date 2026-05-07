@@ -1,51 +1,98 @@
 # https://github.com/pahlisch/streamlit-app-volcano
 import pandas as pd
-import requests
 import streamlit as st
-import plotly.express as px
-from utils import tools as tool
+import folium
+from streamlit_folium import st_folium
+from pathlib import Path
 
 #tool.streamlit_config(page_title="🌋 Volcanos", page_icon="🌋")
 
-def http_requests(url):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    return requests.get(url, headers=headers)
-
-def _get_volcanos():
-    url1="https://volcano.oregonstate.edu/volcano_table"
-    url2="https://volcano.oregonstate.edu/volcano_table?page=1"
-    url3="https://volcano.oregonstate.edu/volcano_table?page=2"
-    volcanos = pd.DataFrame()
-    df1 = pd.read_html(http_requests(url1).text)[0]
-    df2 = pd.read_html(http_requests(url2).text)[0]
-    df3 = pd.read_html(http_requests(url3).text)[0]
-
-    volcanos = pd.concat([df1, df2, df3], ignore_index=True)
-    #volnanos = volnanos.sort_values(by=['Country'])
-    st.write(f"Number of volcanos 🌋: {len(volcanos)} from {url1}")
-
-    fig = tool.plotly_map(volcanos, lat="Latitude (dd)", lon="Longitude (dd)", 
-                        title= "Volcanos", hover_name="Volcano Name", 
-                        hover_data=["Country",  "Elevation (m)"])
-
-    st.write(fig)
-
-    with st.expander("Volcano list"):
-        st.dataframe(volcanos)
+VOLCANO_FILE = Path(__file__).parent / "mzk" / "GVP_Volcano_List_Holocene_202505011922.csv"
 
 
+@st.cache_data(show_spinner=False)
+def load_volcano_data():
+    volcanos = pd.read_csv(VOLCANO_FILE)
+    volcanos = volcanos.dropna(subset=["Latitude", "Longitude"])
+    volcanos["url"] = volcanos["Volcano Number"].apply(
+        lambda volcano_number: f"https://volcano.si.edu/volcano.cfm?vn={volcano_number}"
+    )
+    return volcanos
+
+
+def build_volcano_map(volcanos):
+    center = [float(volcanos["Latitude"].mean()), float(volcanos["Longitude"].mean())]
+    volcano_map = folium.Map(
+        location=center,
+        zoom_start=2,
+        tiles="OpenStreetMap",
+        prefer_canvas=True,
+    )
+
+    for _, volcano in volcanos.iterrows():
+        tooltip = (
+            f"Volcano: {volcano['Volcano Name']}<br>"
+            f"Country: {volcano['Country']}<br>"
+            f"Elevation: {volcano['Elevation (m)']} m<br>"
+            f"Last Known Eruption: {volcano['Last Known Eruption']}<br>"
+            f"URL: {volcano['url']}"
+        )
+        folium.CircleMarker(
+            location=[float(volcano["Latitude"]), float(volcano["Longitude"])],
+            radius=5,
+            color="#c92a2a",
+            fill=True,
+            fill_color="#f03e3e",
+            fill_opacity=0.75,
+            tooltip=tooltip,
+        ).add_to(volcano_map)
+
+    return volcano_map
+
+
+def filter_volcanos_by_bounds(volcanos, bounds):
+    if not bounds:
+        return volcanos
+
+    south = bounds["_southWest"]["lat"]
+    north = bounds["_northEast"]["lat"]
+    west = bounds["_southWest"]["lng"]
+    east = bounds["_northEast"]["lng"]
+
+    lat_filter = volcanos["Latitude"].between(south, north)
+    if west <= east:
+        lon_filter = volcanos["Longitude"].between(west, east)
+    else:
+        lon_filter = (volcanos["Longitude"] >= west) | (volcanos["Longitude"] <= east)
+
+    return volcanos[lat_filter & lon_filter]
 
 
 def get_volcanos():
-    volcan_file="mypages/mzk/GVP_Volcano_List_Holocene_202505011922.csv"
-    volcanos = pd.read_csv(volcan_file)
+    volcanos = load_volcano_data()
     st.write(f"Number of volcanos 🌋: {len(volcanos)}")
 
-    fig = tool.plotly_map(volcanos, lat="Latitude", lon="Longitude", 
-                        title= "Volcanos", hover_name="Volcano Name", 
-                        hover_data=["Country",  "Elevation (m)", "Volcanic Region", "Last Known Eruption"])
+    if len(volcanos):
+        map_data = st_folium(
+            build_volcano_map(volcanos),
+            height=500,
+            use_container_width=True,
+            key="volcano-map",
+            returned_objects=["bounds"],
+        ) or {}
+        visible_volcanos = filter_volcanos_by_bounds(volcanos, map_data.get("bounds")).copy()
 
-    st.write(fig)
-
-    with st.expander("Volcano list"):
-        st.dataframe(volcanos)
+        with st.expander("Volcano list"):
+            st.write(f"Visible volcano(s): {len(visible_volcanos)}")
+            visible_volcanos = visible_volcanos.sort_values(by=["Volcano Name"])
+            st.dataframe(
+                visible_volcanos,
+                column_config={
+                    "url": st.column_config.LinkColumn(
+                        "url",
+                        display_text="GVP details",
+                    )
+                },
+                hide_index=True,
+                use_container_width=True,
+            )
