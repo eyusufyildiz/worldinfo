@@ -15,7 +15,7 @@ st.set_page_config(page_title="🛰️ ISS (International Space Station) Now", p
 ISS_POSITION_URL = "http://api.open-notify.org/iss-now.json"
 ASTROS_URL = "http://api.open-notify.org/astros.json"
 ISS_TRAIL_FILE = Path(__file__).with_name("iss_positions.json")
-ISS_TRAIL_LIMIT = 180
+ISS_TRAIL_LIMIT = 60
 
 
 @st.cache_data(ttl=4, show_spinner=False)
