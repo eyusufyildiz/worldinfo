@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import json
+from pathlib import Path
 import pydeck as pdk
 import requests
 
@@ -17,7 +19,8 @@ st.set_page_config(page_title="🛰️ ISS (International Space Station) Now", p
 
 ISS_POSITION_URL = "http://api.open-notify.org/iss-now.json"
 ASTROS_URL = "http://api.open-notify.org/astros.json"
-ISS_TRAIL_LIMIT = 24
+ISS_TRAIL_FILE = Path(__file__).with_name("iss_positions.json")
+ISS_TRAIL_LIMIT = 180
 
 
 @st.cache_data(ttl=4, show_spinner=False)
@@ -51,32 +54,92 @@ def reverse_geocode_position(lat, lon):
     return location.raw.get("address")
 
 
+def read_iss_trail():
+    if not ISS_TRAIL_FILE.exists():
+        return []
+
+    try:
+        trail = json.loads(ISS_TRAIL_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    if not isinstance(trail, list):
+        return []
+
+    return trail[-ISS_TRAIL_LIMIT:]
+
+
+def write_iss_trail(trail):
+    try:
+        ISS_TRAIL_FILE.write_text(json.dumps(trail[-ISS_TRAIL_LIMIT:]))
+    except OSError:
+        pass
+
+
 def update_iss_trail(lat, lon, timestamp):
-    trail = st.session_state.setdefault("iss_trail", [])
+    trail = st.session_state.setdefault("iss_trail", read_iss_trail())
     if not trail or trail[-1]["timestamp"] != timestamp:
         trail.append({"lat": lat, "lon": lon, "timestamp": timestamp})
-        st.session_state["iss_trail"] = trail[-ISS_TRAIL_LIMIT:]
+        trail = trail[-ISS_TRAIL_LIMIT:]
+        st.session_state["iss_trail"] = trail
+        write_iss_trail(trail)
 
-    return pd.DataFrame(st.session_state["iss_trail"])
+    return pd.DataFrame(trail)
+
+
+def build_path_segments(trail):
+    if len(trail) < 2:
+        return pd.DataFrame(columns=["from_lon", "from_lat", "to_lon", "to_lat"])
+
+    segments = []
+    points = trail.to_dict("records")
+    for start, end in zip(points, points[1:]):
+        segments.append(
+            {
+                "from_lon": start["lon"],
+                "from_lat": start["lat"],
+                "to_lon": end["lon"],
+                "to_lat": end["lat"],
+            }
+        )
+
+    return pd.DataFrame(segments)
+
+
+def previous_positions(trail):
+    if len(trail) <= 1:
+        return trail.iloc[0:0]
+
+    return trail.iloc[:-1]
 
 
 def draw_live_iss_map(current_position, trail):
+    path_segments = build_path_segments(trail)
+    previous_trail = previous_positions(trail)
     current_layer = pdk.Layer(
         "ScatterplotLayer",
         data=current_position,
         get_position="[lon, lat]",
-        get_radius=180000,
-        get_fill_color=[240, 62, 62, 220],
+        get_radius=70000,
+        get_fill_color=[240, 62, 62, 230],
         get_line_color=[255, 255, 255],
         line_width_min_pixels=2,
         pickable=True,
     )
+    path_layer = pdk.Layer(
+        "LineLayer",
+        data=path_segments,
+        get_source_position="[from_lon, from_lat]",
+        get_target_position="[to_lon, to_lat]",
+        get_color=[46, 119, 214, 190],
+        get_width=3,
+    )
     trail_layer = pdk.Layer(
         "ScatterplotLayer",
-        data=trail,
+        data=previous_trail,
         get_position="[lon, lat]",
-        get_radius=55000,
-        get_fill_color=[25, 113, 194, 120],
+        get_radius=35000,
+        get_fill_color=[46, 119, 214, 135],
     )
     view_state = pdk.ViewState(
         latitude=float(current_position.iloc[0]["lat"]),
@@ -87,7 +150,7 @@ def draw_live_iss_map(current_position, trail):
     deck = pdk.Deck(
         map_style=None,
         initial_view_state=view_state,
-        layers=[trail_layer, current_layer],
+        layers=[path_layer, trail_layer, current_layer],
         tooltip={"text": "ISS\nLat: {lat}\nLon: {lon}\nTime: {timestamp}"},
     )
     st.pydeck_chart(deck, use_container_width=True)
